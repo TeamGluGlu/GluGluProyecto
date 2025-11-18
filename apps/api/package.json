@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "API Fastify + Prisma (MySQL) para GluGlu",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx src/server.ts",

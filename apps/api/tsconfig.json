@@ -1,16 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "ESNext",  // ← Mantener ESNext
+    "moduleResolution": "bundler",  // ← CAMBIAR de "node" a "bundler"
     "outDir": "dist",
+    "rootDir": "src",  // ← AGREGAR
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["node"],
-    "allowSyntheticDefaultImports": true,
-    "rootDir": "src"
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }
