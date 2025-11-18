@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { normalizeApiResponse } from '@/lib/helpers';
 import { Filters } from '@/components/Filters';
 import { DataTable } from '@/components/DataTable';
 import LotForm from '@/components/LotForm';
@@ -13,14 +14,6 @@ type LotRow = {
   stock_actual: number | string;
 };
 
-function asArray<T = any>(value: any): T[] {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.data)) return value.data;
-  if (Array.isArray(value?.rows)) return value.rows;
-  if (Array.isArray(value?.items?.data)) return value.items.data;
-  return [];
-}
-
 export default async function LotsPage({
   searchParams,
 }: {
@@ -28,7 +21,7 @@ export default async function LotsPage({
 }) {
   const qp = new URLSearchParams();
   if (searchParams.item_id) qp.set('item_id', searchParams.item_id);
-  if (searchParams.lote_codigo) qp.set('lote_codigo', searchParams.lote_codigo);
+  if (searchParams.search) qp.set('search', searchParams.search);
   qp.set('page', '1');
   qp.set('pageSize', '50');
 
@@ -37,18 +30,10 @@ export default async function LotsPage({
 
   try {
     const res = await api<any>(`/item-lots/stock?${qp.toString()}`);
+    rows = normalizeApiResponse<LotRow>(res);
+    total = res?.meta?.total || rows.length;
 
-    // Soporta ambas formas: { meta, rows } o { data }
-    if (Array.isArray(res?.rows)) {
-      rows = res.rows;
-      total = Number(res?.meta?.total ?? rows.length);
-    } else {
-      const arr = asArray<LotRow>(res);
-      rows = arr;
-      total = arr.length;
-    }
-
-    // Transformar fecha_ingreso a formato legible
+    // Formatear fechas
     rows = rows.map((r) => ({
       ...r,
       fecha_ingreso: r.fecha_ingreso
@@ -72,6 +57,7 @@ export default async function LotsPage({
     { key: 'fecha_ingreso', header: 'Ingreso' },
     { key: 'stock_actual', header: 'Stock' },
   ] as const;
+
 
   return (
     <div className="w-full min-h-screen p-6">

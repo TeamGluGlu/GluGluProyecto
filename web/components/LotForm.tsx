@@ -1,94 +1,123 @@
 'use client';
+
 import { useState } from 'react';
+import { api } from '@/lib/api';
 
 export default function LotForm() {
   const [itemId, setItemId] = useState('');
   const [lote, setLote] = useState('');
-  const [fecha, setFecha] = useState<string>(()=> new Date().toISOString().slice(0,10));
-  const [costo, setCosto] = useState('0');
-  const [cantidad, setCantidad] = useState('0');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string|undefined>();
+  const [fecha, setFecha] = useState('');
+  const [costo, setCosto] = useState('');
+  const [cantidad, setCantidad] = useState('');
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault(); 
-    setLoading(true); 
-    setMsg(undefined);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    const data = {
+      item_id: Number(itemId),
+      lote_codigo: lote,
+      fecha_ingreso: fecha,
+      costo_lote: Number(costo),
+      cantidad_inicial: Number(cantidad),
+    };
+
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001';
-      const res = await fetch(`${base}/item-lots`, {
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: Number(itemId),
-          lote_codigo: lote,
-          fecha_ingreso: fecha,
-          costo_lote: Number(costo),
-          cantidad_inicial: Number(cantidad)
-        })
+      await api('/item-lots', {
+        method: 'POST',
+        body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error(await res.text());
-      setMsg('✅ Lote creado'); 
-      setLote(''); 
-      setCantidad('0');
-    } catch (err:any) { 
-      setMsg('❌ ' + (err?.message || 'Error')); 
-    } finally { 
-      setLoading(false); 
+
+      setMessage('✅ Lote creado exitosamente');
+
+      // Limpiar inputs manualmente porque son controlados
+      setItemId('');
+      setLote('');
+      setFecha('');
+      setCosto('');
+      setCantidad('');
+
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err: any) {
+      setMessage(`❌ Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="text-sm font-medium text-cyan-600">Nuevo Lote</div>
+
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-        <input 
-          required 
-          value={itemId} 
-          onChange={e=>setItemId(e.target.value)} 
+        <input
+          required
+          value={itemId}
+          onChange={(e) => setItemId(e.target.value)}
           placeholder="Item ID"
-          className="border-2 border-cyan-400 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200" 
+          className="border-2 border-cyan-400 rounded-xl px-3 py-2"
         />
-        <input 
-          required 
-          value={lote} 
-          onChange={e=>setLote(e.target.value)} 
+
+        <input
+          required
+          value={lote}
+          onChange={(e) => setLote(e.target.value)}
           placeholder="Lote"
-          className="border-2 border-cyan-400 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200" 
+          className="border-2 border-cyan-400 rounded-xl px-3 py-2"
         />
-        <input 
-          type="date" 
-          required 
-          value={fecha} 
-          onChange={e=>setFecha(e.target.value)}
-          className="border-2 border-cyan-400 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200" 
+
+        <input
+          type="date"
+          required
+          value={fecha}
+          onChange={(e) => setFecha(e.target.value)}
+          className="border-2 border-cyan-400 rounded-xl px-3 py-2"
         />
-        <input 
-          type="number" 
-          min="0" 
-          step="0.01" 
-          value={costo} 
-          onChange={e=>setCosto(e.target.value)} 
+
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={costo}
+          onChange={(e) => setCosto(e.target.value)}
           placeholder="Costo"
-          className="border-2 border-cyan-400 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200" 
+          className="border-2 border-cyan-400 rounded-xl px-3 py-2"
         />
-        <input 
-          type="number" 
-          min="0" 
-          step="0.01" 
-          value={cantidad} 
-          onChange={e=>setCantidad(e.target.value)} 
+
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={cantidad}
+          onChange={(e) => setCantidad(e.target.value)}
           placeholder="Cantidad inicial"
-          className="border-2 border-cyan-400 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200" 
+          className="border-2 border-cyan-400 rounded-xl px-3 py-2"
         />
       </div>
-      <button 
-        disabled={loading} 
-        className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-600 text-white font-medium hover:from-cyan-600 hover:to-cyan-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-cyan-500 text-white px-4 py-2 rounded-lg hover:bg-cyan-600 disabled:opacity-50"
       >
-        {loading ? 'Guardando...' : 'Guardar Lote'}
+        {loading ? 'Guardando...' : 'Registrar Lote'}
       </button>
-      {msg && <div className="text-sm font-medium text-cyan-600">{msg}</div>}
+
+      {message && (
+        <div
+          className={`p-3 rounded-lg ${
+            message.includes('✅')
+              ? 'bg-green-100 text-green-700'
+              : 'bg-red-100 text-red-700'
+          }`}
+        >
+          {message}
+        </div>
+      )}
     </form>
   );
 }
