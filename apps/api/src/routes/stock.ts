@@ -27,7 +27,7 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
     const { to, subject, html } = parsed.data;
-    const toList = to.split(',').map(s => s.trim()).filter(Boolean);
+    const toList = to.split(',').map((s: string) => s.trim()).filter(Boolean);
 
     try {
       const info = await sendMail(toList, subject, html);
