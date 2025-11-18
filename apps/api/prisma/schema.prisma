@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model dispatches {
+  id                Int           @id @default(autoincrement())
+  fecha_hora_salida DateTime      @default(now()) @db.Timestamp(0) // <-- CORRECCIÓN: Usando @db.Timestamp(0) para PostgreSQL
+  bidones_llevados  Int           @default(0)
+  chofer            String?       @db.VarChar(100)
+  placa             String?       @db.VarChar(20)
+  observacion       String?       @db.VarChar(255)
+  returns_log       returns_log[]
+
+  @@index([fecha_hora_salida], map: "idx_dispatches_fecha")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inventory_movements {
+  id                BigInt                        @id @default(autoincrement())
+  item_id           Int
+  lot_id            Int
+  tipo              inventory_movements_tipo
+  cantidad          Decimal                       @db.Decimal(10, 2)
+  motivo            inventory_movements_motivo
+  ref_tipo          String?                       @db.VarChar(50)
+  ref_id            Int?
+  turno_id          Int?
+  fecha_hora        DateTime                      @default(now()) @db.Timestamp(0) // <-- CORRECCIÓN: Usando @db.Timestamp(0)
+  observacion       String?                       @db.VarChar(255)
+  items             items                         @relation(fields: [item_id], references: [id], map: "fk_im_item")
+  item_lots         item_lots                     @relation(fields: [lot_id], references: [id], map: "fk_im_lot")
+  shifts            shifts?                       @relation(fields: [turno_id], references: [id], map: "fk_im_shift")
+
+  @@index([fecha_hora], map: "idx_im_fecha")
+  @@index([item_id], map: "idx_im_item")
+  @@index([lot_id], map: "idx_im_lot")
+  @@index([tipo, motivo], map: "idx_im_tipo_motivo")
+  @@index([turno_id], map: "idx_im_turno")
+}
+
+model item_lots {
+  id                        Int                       @id @default(autoincrement())
+  item_id                   Int
+  lote_codigo               String                    @db.VarChar(50)
+  fecha_ingreso             DateTime                  @db.Date
+  costo_lote                Decimal                   @db.Decimal(10, 2)
+  cantidad_inicial          Decimal                   @db.Decimal(10, 2)
+  inventory_movements       inventory_movements[]
+  items                     items                     @relation(fields: [item_id], references: [id], map: "fk_item_lots_item")
+  production_consumptions   production_consumptions[]
+  production_wastes         production_wastes[]
+
+  @@unique([item_id, lote_codigo], map: "uq_item_lots_item_lote")
+  @@index([fecha_ingreso], map: "idx_item_lots_fecha")
+}
+
+model items {
+  id                        Int                       @id @default(autoincrement())
+  nombre                    String                    @unique(map: "uq_items_nombre") @db.VarChar(100)
+  tipo                      items_tipo
+  unidad                    items_unidad              @default(UND)
+  activo                    Boolean                   @default(true)
+  created_at                DateTime                  @default(now()) @db.Timestamp(0)
+  inventory_movements       inventory_movements[]
+  item_lots                 item_lots[]
+  production_consumptions   production_consumptions[]
+  production_wastes         production_wastes[]
+  thresholds                thresholds?
+
+  @@index([tipo], map: "idx_items_tipo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model production_batches {
+  id                        Int                       @id @default(autoincrement())
+  shift_id                  Int
+  fecha_hora                DateTime                  @default(now()) @db.Timestamp(0) // <-- CORRECCIÓN: Usando @db.Timestamp(0)
+  bidones_llenados          Int                       @default(0)
+  observacion               String?                   @db.VarChar(255)
+  shifts                    shifts                    @relation(fields: [shift_id], references: [id], onDelete: Cascade, map: "fk_batches_shift")
+  production_consumptions   production_consumptions[]
+  production_wastes         production_wastes[]
+
+  @@index([fecha_hora], map: "idx_batches_fecha")
+  @@index([shift_id, fecha_hora], map: "idx_batches_shift_fecha")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model production_consumptions {
+  id                   Int                @id @default(autoincrement())
+  batch_id             Int
+  item_id              Int
+  lot_id               Int
+  cantidad             Decimal            @db.Decimal(10, 2)
+  production_batches   production_batches @relation(fields: [batch_id], references: [id], onDelete: Cascade, map: "fk_pcons_batch")
+  items                items              @relation(fields: [item_id], references: [id], map: "fk_pcons_item")
+  item_lots            item_lots          @relation(fields: [lot_id], references: [id], map: "fk_pcons_lot")
+
+  @@index([batch_id], map: "idx_pcons_batch")
+  @@index([item_id], map: "idx_pcons_item")
+  @@index([lot_id], map: "idx_pcons_lot")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model production_wastes {
+  id                   Int                       @id @default(autoincrement())
+  batch_id             Int
+  item_id              Int
+  lot_id               Int
+  cantidad             Decimal                   @db.Decimal(10, 2)
+  razon                production_wastes_razon   @default(OTRO)
+  production_batches   production_batches        @relation(fields: [batch_id], references: [id], onDelete: Cascade, map: "fk_pwaste_batch")
+  items                items                     @relation(fields: [item_id], references: [id], map: "fk_pwaste_item")
+  item_lots            item_lots                 @relation(fields: [lot_id], references: [id], map: "fk_pwaste_lot")
+
+  @@index([batch_id], map: "idx_pwaste_batch")
+  @@index([item_id], map: "idx_pwaste_item")
+  @@index([lot_id], map: "idx_pwaste_lot")
+}
+
+model returns_log {
+  id                   Int        @id @default(autoincrement())
+  dispatch_id          Int
+  fecha_hora_retorno   DateTime   @default(now()) @db.Timestamp(0) // <-- CORRECCIÓN: Usando @db.Timestamp(0)
+  vacios_regresan      Int        @default(0)
+  nota                 String?    @db.VarChar(255)
+  dispatches           dispatches @relation(fields: [dispatch_id], references: [id], onDelete: Cascade, map: "fk_returns_dispatch")
+
+  @@index([dispatch_id], map: "idx_returns_dispatch")
+  @@index([fecha_hora_retorno], map: "idx_returns_fecha")
+}
+
+model shifts {
+  id                    Int                     @id @default(autoincrement())
+  fecha                 DateTime                @db.Date
+  numero                Int                     @db.SmallInt // <-- CORRECCIÓN: Cambiado de TinyInt a SmallInt
+  hora_inicio           DateTime                @db.Time(0)
+  hora_fin              DateTime?               @db.Time(0)
+  supervisor            String?                 @db.VarChar(100)
+  estado                shifts_estado           @default(ABIERTO)
+  created_at            DateTime                @default(now()) @db.Timestamp(0)
+  inventory_movements   inventory_movements[]
+  production_batches    production_batches[]
+
+  @@unique([fecha, numero], map: "uq_shifts_fecha_numero")
+}
+
+model thresholds {
+  id              Int     @id @default(autoincrement())
+  item_id         Int     @unique(map: "uq_threshold_item")
+  minimo_alerta   Decimal @default(0.00) @db.Decimal(10, 2)
+  items           items   @relation(fields: [item_id], references: [id], onDelete: Cascade, map: "fk_threshold_item")
+}
+
+enum items_tipo {
+  TAPA
+  PRECINTO
+  ETIQUETA
+  CA_O    @map("CAÑO")
+  BIDON_NUEVO
+  QUIMICO
+}
+
+enum inventory_movements_tipo {
+  IN
+  OUT
+}
+
+enum items_unidad {
+  UND
+  ML
+  LT
+  KG
+}
+
+enum inventory_movements_motivo {
+  COMPRA
+  USO_PRODUCCION
+  MERMA
+  AJUSTE
+  DEVOLUCION
+}
+
+enum production_wastes_razon {
+  DEFECTO
+  CONTAMINADO
+  DOBLADO
+  MAL_CORTE
+  IMPRESO_MAL
+  OTRO
+}
+
+enum shifts_estado {
+  ABIERTO
+  CERRADO
+}
