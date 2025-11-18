@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { createItemLotSchema, updateItemLotSchema, listItemLotsQuery } from '../schemas/itemLots';
-import { toSkipTake } from '../schemas/common';
+import { toSkipTake } from '../schemas/common.js';
 
 export async function registerItemLotsRoutes(app: FastifyInstance, prisma: PrismaClient) {
   // Listar con paginación y filtros

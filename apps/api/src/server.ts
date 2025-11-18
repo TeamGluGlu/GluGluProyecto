@@ -5,13 +5,13 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import './utils/bigint-json';
+import './utils/bigint-json.js';
 
 // Rutas modulares
-import { registerItemLotsRoutes } from './routes/itemLots';
-import { registerMovementRoutes } from './routes/movements';
-import { registerStockRoutes } from './routes/stock';
-import { registerProductionRoutes } from './routes/production'; // 👈 Agregar este import
+import { registerItemLotsRoutes } from './routes/itemLots.js';
+import { registerMovementRoutes } from './routes/movements.js';
+import { registerStockRoutes } from './routes/stock.js';
+import { registerProductionRoutes } from './routes/production.js'; // 👈 Agregar este import
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();

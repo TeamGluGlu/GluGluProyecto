@@ -1,6 +1,6 @@
 // apps/api/src/schemas/itemLots.ts
 import { z } from 'zod';
-import { paginationQuery } from './common';
+import { paginationQuery } from './common.js';
 
 export const createItemLotSchema = z.object({
     item_id: z.number().int().positive(),

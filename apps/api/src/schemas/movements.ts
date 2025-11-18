@@ -1,6 +1,6 @@
 // apps/api/src/schemas/movements.ts
 import { z } from 'zod';
-import { paginationQuery } from './common';
+import { paginationQuery } from './common.js';
 
 
 export const createMovementSchema = z.object({

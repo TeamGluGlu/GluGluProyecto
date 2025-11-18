@@ -2,7 +2,7 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { buildTransport, sendMail } from '../lib/mailer';
+import { buildTransport, sendMail } from '../lib/mailer.js';
 
 export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaClient) {
   // A) Verifica conexión SMTP (NO envía correo)
