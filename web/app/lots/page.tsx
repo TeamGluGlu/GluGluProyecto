@@ -24,23 +24,11 @@ function asArray<T = any>(value: any): T[] {
 export default async function LotsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ [k: string]: string | string[] | undefined }>;
+  searchParams: { [k: string]: string | undefined };
 }) {
-  // 👇 Esperar a que se resuelva la Promise
-  const sp = await searchParams;
-
   const qp = new URLSearchParams();
-
-  if (sp.item_id) {
-    const value = Array.isArray(sp.item_id) ? sp.item_id[0] : sp.item_id;
-    qp.set('item_id', value);
-  }
-
-  if (sp.lote_codigo) {
-    const value = Array.isArray(sp.lote_codigo) ? sp.lote_codigo[0] : sp.lote_codigo;
-    qp.set('lote_codigo', value);
-  }
-
+  if (searchParams.item_id) qp.set('item_id', searchParams.item_id);
+  if (searchParams.lote_codigo) qp.set('lote_codigo', searchParams.lote_codigo);
   qp.set('page', '1');
   qp.set('pageSize', '50');
 
