@@ -2,7 +2,7 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { createMovementSchema, listMovementsQuery } from '../schemas/movements';
+import { createMovementSchema, listMovementsQuery } from '../schemas/movements.js';
 import { toSkipTake } from '../schemas/common.js';
 
 async function getStockByLot(prisma: PrismaClient, item_id: number, lot_id: number) {
