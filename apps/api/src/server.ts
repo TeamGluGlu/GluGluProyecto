@@ -20,15 +20,40 @@ const prisma = new PrismaClient();
 await app.register(cors, { origin: true });
 await app.register(swagger, {
     openapi: {
-    info: { title: 'GluGlu API', version: '1.0.0' }
+        info: { title: 'GluGlu API', version: '1.0.0' },
+        tags: [
+            { name: 'Items', description: 'Gestión de ítems' },
+            { name: 'ItemLots', description: 'Gestión de lotes de ítems' },
+            { name: 'Movements', description: 'Gestión de movimientos de inventario (Kardex)' },
+            { name: 'Stock', description: 'Consultas de Stock' },
+            { name: 'Production', description: 'Gestión de producción/consumos' },
+            { name: 'Dev', description: 'Rutas de desarrollo y prueba' },
+        ],
     }
 });
 await app.register(swaggerUI, { routePrefix: '/docs' });
 
-// ---------------------- Schemas (Zod) ----------------------
+// ---------------------- Schemas (Zod y JSON Schema) ----------------------
 const idParamSchema = z.object({
     id: z.coerce.number().int().positive()
 });
+// JSON Schema para parámetros de ID
+const idParamJsonSchema = {
+    type: 'object',
+    properties: { id: { type: 'number', description: 'ID del ítem' } },
+    required: ['id']
+};
+
+const itemBaseSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'number' },
+        nombre: { type: 'string' },
+        tipo: { type: 'string', enum: ['TAPA', 'PRECINTO', 'ETIQUETA', 'CA_O', 'BIDON_NUEVO', 'QUIMICO'] },
+        unidad: { type: 'string', enum: ['UND', 'ML', 'LT', 'KG'] },
+        activo: { type: 'boolean' }
+    }
+};
 
 const createItemSchema = z.object({
     nombre: z.string().min(2).max(100),
@@ -36,19 +61,58 @@ const createItemSchema = z.object({
     unidad: z.enum(['UND', 'ML', 'LT', 'KG']).default('UND'),
     activo: z.boolean().default(true)
 });
+// JSON Schema para Item (Request Body)
+const createItemJsonSchema = {
+    type: 'object',
+    properties: {
+        nombre: { type: 'string', description: 'Nombre del ítem (mín. 2, máx. 100)' },
+        tipo: { type: 'string', enum: ['TAPA', 'PRECINTO', 'ETIQUETA', 'CA_O', 'BIDON_NUEVO', 'QUIMICO'], description: 'Tipo de ítem' },
+        unidad: { type: 'string', enum: ['UND', 'ML', 'LT', 'KG'], default: 'UND', description: 'Unidad de medida' },
+        activo: { type: 'boolean', default: true, description: 'Estado del ítem' }
+    },
+    required: ['nombre', 'tipo'],
+    additionalProperties: false
+};
 
 const updateItemSchema = createItemSchema.partial();
+// JSON Schema para Item (Partial Request Body)
+const updateItemJsonSchema = {
+    type: 'object',
+    properties: createItemJsonSchema.properties,
+    additionalProperties: false
+};
 
 // ---------------------- Rutas básicas ----------------------
-app.get('/health', async () => ({ ok: true }));
+app.get('/health', { schema: { tags: ['Dev'], description: 'Verifica el estado de la API' } }, async () => ({ ok: true }));
 
 // LISTAR items
-app.get('/items', async () => {
+app.get('/items', {
+    schema: {
+        description: 'LISTAR todos los ítems',
+        tags: ['Items'],
+        response: {
+            200: {
+                type: 'array',
+                items: itemBaseSchema,
+            }
+        }
+    }
+}, async () => {
     return prisma.items.findMany({ orderBy: { nombre: 'asc' } });
 });
 
 // OBTENER item por id
-app.get('/items/:id', async (req, reply) => {
+app.get('/items/:id', {
+    schema: {
+        description: 'OBTENER un ítem por ID',
+        tags: ['Items'],
+        params: idParamJsonSchema,
+        response: {
+            200: itemBaseSchema,
+            404: { type: 'object', properties: { message: { type: 'string' } } }
+        }
+    }
+}, async (req, reply) => {
     const parsed = idParamSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
@@ -59,7 +123,18 @@ app.get('/items/:id', async (req, reply) => {
 });
 
 // CREAR item
-app.post('/items', async (req, reply) => {
+app.post('/items', {
+    schema: {
+        description: 'CREAR un nuevo ítem',
+        tags: ['Items'],
+        body: createItemJsonSchema,
+        response: {
+            201: itemBaseSchema,
+            400: { type: 'object', properties: { message: { type: 'string' } } },
+            409: { type: 'object', properties: { message: { type: 'string' } } }, // P2002
+        }
+    }
+}, async (req, reply) => {
     const parsed = createItemSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
@@ -68,7 +143,19 @@ app.post('/items', async (req, reply) => {
 });
 
 // ACTUALIZAR item
-app.put('/items/:id', async (req, reply) => {
+app.put('/items/:id', {
+    schema: {
+        description: 'ACTUALIZAR un ítem existente por ID',
+        tags: ['Items'],
+        params: idParamJsonSchema,
+        body: updateItemJsonSchema,
+        response: {
+            200: itemBaseSchema,
+            400: { type: 'object', properties: { message: { type: 'string' } } },
+            404: { type: 'object', properties: { message: { type: 'string' } } }
+        }
+    }
+}, async (req, reply) => {
     const params = idParamSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send(params.error.flatten());
 
@@ -87,7 +174,17 @@ app.put('/items/:id', async (req, reply) => {
 });
 
 // ELIMINAR item (soft-delete)
-app.delete('/items/:id', async (req, reply) => {
+app.delete('/items/:id', {
+    schema: {
+        description: 'ELIMINAR (soft-delete) un ítem por ID',
+        tags: ['Items'],
+        params: idParamJsonSchema,
+        response: {
+            204: { type: 'null' },
+            404: { type: 'object', properties: { message: { type: 'string' } } }
+        }
+    }
+}, async (req, reply) => {
   const params = idParamSchema.safeParse(req.params);
   if (!params.success) return reply.code(400).send(params.error.flatten());
 
