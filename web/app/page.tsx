@@ -23,7 +23,7 @@ export default async function Page() {
   const lowCount = low.length;
   const stockTotal = items.reduce((acc, i) => acc + Number(i.stock_total || 0), 0);
 
-  // Serie de datos para el gráfico (Datos simulados)
+  // Serie de datos para el gráfico
   const days = 28; 
   const step = 4; 
   
@@ -57,7 +57,7 @@ export default async function Page() {
   return (
     <div className="space-y-4">
       
-      {/* 1. TÍTULO PRINCIPAL: Separación cómoda del tope */}
+      {/* 1. TÍTULO PRINCIPAL */}
       <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-3">Dashboard</h1> 
       
       {/* 2. KPI Cards Grid */}
@@ -68,10 +68,10 @@ export default async function Page() {
         <KpiCard title="Actualizado" value={new Date().toLocaleString('es-PE')} />
       </div>
 
-      {/* --- 3. GRÁFICO (ALTURA AMPLIADA para evitar clipping) --- */}
+      {/* --- 3. GRÁFICO --- */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold mb-3 text-gray-700">Evolución de stock (últimos 30 días)</h2>
-        <div className="h-72"> {/* ALTURA SUBIDA A h-72 */}
+        <div className="h-72"> 
             <StockChart data={serie} />
         </div>
       </div>
@@ -98,8 +98,15 @@ export default async function Page() {
               <DataTable columns={lowColumns as any} rows={low.slice(0, 10)} />
             </div>
           ) : (
-            <div className="rounded-xl border p-4 text-center text-gray-500 bg-green-50 border-green-200">
-              ✅ No hay alertas de stock bajo
+            // --- AQUÍ ESTÁ EL CAMBIO: Ícono de Check Estilizado ---
+            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-gray-200 rounded-xl bg-gray-50">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-900">Todo en orden</p>
+              <p className="text-xs text-gray-500">No hay alertas de stock bajo</p>
             </div>
           )}
           {low.length > 10 && (

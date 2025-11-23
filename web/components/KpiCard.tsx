@@ -1,12 +1,15 @@
-// web/components/KpiCard.tsx (VERSIÓN FINAL COMPACTA y LIMPIA)
 import React from 'react';
 
 // Helpers para íconos SVG
 function getVisuals(title: string) {
+    // Ahora TODAS usan 'bg-gray-900' (Negro) para uniformidad, excepto la de Alerta (Rojo)
     if (title.includes('Items')) return { icon: 'BOX', color: 'bg-gray-900', secondaryColor: 'text-green-600' };
     if (title.includes('Stock')) return { icon: 'TOTAL', color: 'bg-gray-900', secondaryColor: 'text-green-600' };
     if (title.includes('umbral')) return { icon: 'ALERT', color: 'bg-red-500', secondaryColor: 'text-red-500' };
-    if (title.includes('Actualizado')) return { icon: 'TIME', color: 'bg-gray-100', secondaryColor: 'text-gray-900' };
+    
+    // CORRECCIÓN AQUÍ: Cambiamos bg-gray-100 por bg-gray-900 para que el ícono blanco resalte
+    if (title.includes('Actualizado')) return { icon: 'TIME', color: 'bg-gray-900', secondaryColor: 'text-gray-900' };
+    
     return { icon: 'BOX', color: 'bg-gray-900', secondaryColor: 'text-green-600' };
 }
 
@@ -19,7 +22,6 @@ const IconComponent = ({ name, colorClass }: { name: string, colorClass: string 
     else Icon = <div></div>;
     return Icon;
 };
-// FIN Helpers
 
 export function KpiCard({ title, value }: { title: string; value: string | number; }) {
     
@@ -30,7 +32,7 @@ export function KpiCard({ title, value }: { title: string; value: string | numbe
         <div className="bg-white rounded-3xl p-4 shadow-md border border-gray-100 h-full transition hover:shadow-lg"> 
             
             <div className="flex justify-between items-start">
-                {/* 1. ICONO */}
+                {/* 1. ICONO: Fondo variable, Ícono SIEMPRE BLANCO */}
                 <div className={`w-10 h-10 ${visuals.color} rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-sm`}> 
                     <IconComponent name={visuals.icon} colorClass="text-white" />
                 </div>

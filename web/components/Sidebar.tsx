@@ -71,7 +71,7 @@ export default function Sidebar() {
                         />
                     </div>
                     <div>
-                        <h3 className="text-gray-900 font-bold text-sm">Admin Planta</h3>
+                        <h3 className="text-gray-900 font-bold text-sm">Renato Chero</h3>
                         <p className="text-gray-500 text-xs">Gerente</p>
                     </div>
                 </div>
@@ -100,19 +100,6 @@ export default function Sidebar() {
                     );
                 })}
             </nav>
-
-            {/* 4. TARJETA NEGRA ABAJO */}
-            <div className="p-6">
-                <div className="bg-black rounded-2xl p-6 text-white relative overflow-hidden shadow-2xl">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-gray-800 rounded-full blur-3xl opacity-50 -mr-10 -mt-10"></div>
-                    
-                    <h4 className="relative z-10 font-bold text-lg mb-1">Acción Rápida</h4>
-                    <p className="relative z-10 text-gray-400 text-xs mb-4">Registrar salida de stock</p>
-                    <button className="relative z-10 w-full bg-white hover:bg-gray-200 text-black py-3 rounded-lg text-xs font-bold transition uppercase tracking-wide">
-                        + Nuevo Movimiento
-                    </button>
-                </div>
-            </div>
         </aside>
     );
 }
