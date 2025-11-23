@@ -30,6 +30,7 @@ export default async function LotsPage({
 
   try {
     const res = await api<any>(`/item-lots/stock?${qp.toString()}`);
+    // Asegúrate de tener esta función en lib/helpers, si no, usa la lógica manual
     rows = normalizeApiResponse<LotRow>(res);
     total = res?.meta?.total || rows.length;
 
@@ -58,75 +59,59 @@ export default async function LotsPage({
     { key: 'stock_actual', header: 'Stock' },
   ] as const;
 
-
   return (
-    <div className="w-full min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-cyan-400 p-6">
+    <div className="w-full min-h-screen"> 
+      <div className="w-full space-y-6">
+        
+        {/* Título Principal */}
+        <h1 className="text-3xl font-bold text-gray-900 mt-4 mb-3">Stock por Lote</h1>
+        
+        {/* Header Section (Monochrome) */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-300 p-6 w-full">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-cyan-600">
-                Stock por Lote
-              </h1>
               <p className="text-sm text-gray-500 mt-1">
                 Gestiona y visualiza el inventario de lotes
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-cyan-50 rounded-xl px-4 py-2 border-2 border-cyan-400">
-                <span className="text-xs font-medium text-cyan-600">
+              <div className="bg-gray-100 rounded-xl px-4 py-2 border border-gray-300">
+                <span className="text-xs font-medium text-gray-600">
                   Total registros
                 </span>
-                <p className="text-2xl font-bold text-cyan-700">{total}</p>
+                <p className="text-2xl font-bold text-gray-900">{total}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters Section */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-cyan-400 p-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-300 p-6 w-full">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-cyan-500 rounded-full"></div>
-            <h2 className="text-lg font-semibold text-cyan-600">Filtros</h2>
+            <div className="w-1 h-6 bg-gray-900 rounded-full"></div>
+            <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
           </div>
           <Filters />
         </div>
 
         {/* Form Section */}
-        <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl shadow-xl border-2 border-cyan-400 p-6">
+        <div className="bg-gray-900 rounded-2xl shadow-xl p-6 w-full">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-1 h-6 bg-white rounded-full"></div>
             <h2 className="text-lg font-semibold text-white">
               Registrar Nuevo Lote
             </h2>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-md border-2 border-cyan-300">
+          <div className="bg-white rounded-xl p-6 shadow-md border border-gray-300">
             <LotForm />
           </div>
         </div>
 
         {/* Table Section */}
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-cyan-400 overflow-hidden">
-          <div className="bg-gradient-to-r from-cyan-500 to-cyan-600 px-6 py-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
-              </svg>
-              Tabla de Inventario
-            </h2>
-          </div>
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-300 overflow-hidden w-full">
+          {/* Eliminamos el header negro manual porque la DataTable ya tiene el suyo redondeado */}
           <div className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Listado de Inventario</h2>
             <DataTable columns={columns as any} rows={rows as any[]} />
           </div>
         </div>

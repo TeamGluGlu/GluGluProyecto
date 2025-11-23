@@ -1,31 +1,105 @@
-export function DataTable<T extends { id?: string|number }>({ columns, rows }:{ columns: { key: keyof T; header: string; }[]; rows: T[]; }) {  
+import React from 'react';
+
+// --- Íconos del Header (Sin Cambios) ---
+const HeaderIcon = ({ columnKey }: { columnKey: string }) => {
+  let icon;
+  switch (columnKey) {
+    case 'item_id': case 'id':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M15 9V5.25A2.25 2.25 0 0012.75 3H6A2.25 2.25 0 003.75 5.25v13.5A2.25 2.25 0 006 21h6.75A2.25 2.25 0 0015 18.75V15m-3-9l-3 3m0 0l-3-3m3 3V2.25" />;
+      break;
+    case 'item_nombre': case 'item':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M20 7L4 7M4 7l4-4m-4 4l4 4m0 0l4-4m-4 4h12M12 11v9m0 0l-4-4m4 4l4-4" />; // Caja
+      break;
+    case 'item_unidad': case 'unidad':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 0a2.25 2.25 0 000 4.5h16.5a2.25 2.25 0 000-4.5m-16.5 0a2.25 2.25 0 010-4.5h16.5a2.25 2.25 0 010 4.5m-16.5 8.25V18a2.25 2.25 0 002.25 2.25h12.75A2.25 2.25 0 0021 18v-1.5M4.5 12.75V15m0 2.25V21M17.25 12.75V15M17.25 17.25V21" />;
+      break;
+    case 'stock': case 'stock_total': case 'stock_actual':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />;
+      break;
+    case 'lote_codigo': case 'lote':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m-4.5 0h19.5m-1.5 0L19.5 10.5M4.5 14.25L5.75 10.5M5.75 10.5h12.5M5.75 10.5V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v4.5m-8.625 10.5c.878 0 1.71-.342 2.333-.954L15 14.25m-3-3l2.25-2.25" />;
+      break;
+    case 'fecha_ingreso': case 'ingreso':
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12v-.008zm-2.25-3h.008v.008H9.75v-.008zM9.75 15h.008v.008H9.75v-.008zm-.75 3h.008v.008H9v-.008zm3.75-3h.008v.008H13.5v-.008zm3.75 0h.008v.008H17.25v-.008zm3.75 0h.008v.008H21v-.008z" />;
+      break;
+    default:
+      icon = <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />;
+  }
+
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      {icon}
+    </svg>
+  );
+};
+
+
+export function DataTable<T extends { id?: string|number }>({ columns, rows }:{ columns: { key: keyof T; header: string; }[]; rows: T[]; }) {  
   const safeRows = rows || [];
   
   return (
-    <div className="overflow-auto rounded-2xl border-2 border-cyan-400">
-      <table className="min-w-full text-sm"> 
-        <thead className="bg-gradient-to-r from-cyan-500 to-cyan-600">
+    <div className="w-full overflow-x-auto"> 
+      
+      <table className="w-full text-sm border-separate border-spacing-0"> 
+        
+        <thead className="bg-gray-900 text-white">
           <tr>
-            {columns.map(c => (
-              <th key={String(c.key)} className="text-left px-4 py-3 font-semibold text-white border-b-2 border-cyan-400">
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c, index) => {
+              const isFirst = index === 0;
+              const isLast = index === columns.length - 1;
+              const roundedClass = isFirst ? 'rounded-l-2xl' : isLast ? 'rounded-r-2xl' : '';
+
+              return (
+                <th 
+                  key={String(c.key)} 
+                  className={`
+                    text-left px-6 py-4 font-semibold
+                    ${roundedClass}
+                  `}
+                >
+                  <div className="flex items-center">
+                    <HeaderIcon columnKey={String(c.key)} />
+                    {c.header}
+                  </div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
+        
         <tbody>
+          {/* Espaciador visual (fila vacía pequeña) */}
+          <tr><td className="h-2"></td></tr>
+
           {safeRows.map((r, i) => (
             <tr 
               key={i} 
-              className="odd:bg-white even:bg-cyan-50 hover:bg-cyan-100 transition-colors border-b border-cyan-200"
+              className="group bg-white hover:bg-gray-50 transition-colors"
             >
-              {columns.map(c => (
-                <td key={String(c.key)} className="px-4 py-3 text-gray-700">
-                  {String(r[c.key] ?? '')}
-                </td>
-              ))}
+              {columns.map((c, index) => {
+                // Borde inferior sutil
+                return (
+                  <td key={String(c.key)} className="px-6 py-4 text-gray-700 border-b border-gray-100 group-hover:text-black first:rounded-l-lg last:rounded-r-lg">
+                    {String(r[c.key] ?? '')}
+                  </td>
+                );
+              })}
             </tr>
           ))}
+          
+          {safeRows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length} className="text-center py-10 text-gray-400 bg-white rounded-xl border border-gray-100 mt-2">
+                <div className="flex flex-col items-center justify-center gap-2">
+                  {/* AQUÍ ESTÁ EL CAMBIO: Ícono de Archivo/Documento en Negro, más pequeño */}
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>No hay datos disponibles</span>
+                </div>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
