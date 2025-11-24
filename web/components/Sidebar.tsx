@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 // --- NUEVOS ÍCONOS SVG (Estilo monocromático y minimalista) ---
 const MenuIcon = ({ name, isActive }: { name: string; isActive: boolean }) => {
+    // Clases dinámicas para manejar el color según el estado activo
     const colorClass = isActive ? 'text-white' : 'text-slate-400 group-hover:text-white';
     
     let iconPath;
@@ -18,8 +19,15 @@ const MenuIcon = ({ name, isActive }: { name: string; isActive: boolean }) => {
     } else if (name === 'Movimientos') {
         iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />; 
     } else if (name === 'Reportes') {
-        // Ícono de Reportes (Chart Bar)
         iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 4h4.896c.032 0 .064-.002.096-.004M21 21v-4a2 2 0 00-2-2h-2a2 2 0 00-2 2v4a2 2 0 002 2h2a2 2 0 002-2zm-2-2h-2m-4 4h2" />;
+    } else if (name === 'Producción') {
+        // Ícono para Producción (Engranaje / Proceso)
+        iconPath = (
+            <>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </>
+        );
     } else {
         iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />;
     }
@@ -38,7 +46,8 @@ const links = [
     { href: '/items', label: 'Productos', name: 'Productos' },
     { href: '/lots', label: 'Lotes / Stock', name: 'Lotes' },
     { href: '/movements', label: 'Movimientos', name: 'Movimientos' },
-    { href: '/reports', label: 'Reportes', name: 'Reportes' }, // <--- CORREGIDO AQUÍ
+    { href: '/reports', label: 'Reportes', name: 'Reportes' },
+    { href: '/production', label: 'Producción', name: 'Producción' }, // Nueva ruta agregada
 ];
 
 export default function Sidebar() {
@@ -79,8 +88,10 @@ export default function Sidebar() {
             <nav className="flex-1 px-6 space-y-2">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 pl-4">General</p>
                 {links.map((link) => {
-                    // Lógica para que /reports/aging también active el botón de /reports
+                    // Lógica para mantener activo el botón en sub-rutas (ej. /reports/aging)
+                    // Se verifica si es la home exacta o si empieza con la ruta (evitando falsos positivos con /)
                     const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
+                    
                     return (
                         <Link 
                             key={link.href} 
