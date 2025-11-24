@@ -1,6 +1,6 @@
 // apps/api/src/routes/itemLots.ts
 import { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { 
     createItemLotJsonSchema, 
@@ -42,6 +42,126 @@ const itemLotStockResponse = {
 };
 
 export async function registerItemLotsRoutes(app: FastifyInstance, prisma: PrismaClient) {
+    
+    // ⚠️ CRÍTICO: Stock por lote PRIMERO (antes de /:id)
+    app.get('/item-lots/stock', {
+        schema: {
+            description: 'OBTENER el stock actual de cada lote',
+            tags: ['ItemLots', 'Stock'],
+            querystring: listItemLotsQueryJsonSchema,
+            response: {
+                200: itemLotStockResponse
+            }
+        }
+    }, async (req, reply) => {
+        try {
+            const parsed = listItemLotsQuery.safeParse(req.query);
+            if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
+            const q = parsed.data;
+
+            const { skip, take } = toSkipTake(q);
+
+            // Construir condiciones WHERE dinámicas
+            let whereItemId = '';
+            let whereSearch = '';
+            
+            if (q.item_id) {
+                whereItemId = `AND il.item_id = ${q.item_id}`;
+            }
+            
+            if (q.search) {
+                // Escapar comillas simples para SQL
+                const searchEscaped = q.search.replace(/'/g, "''");
+                whereSearch = `AND il.lote_codigo ILIKE '%${searchEscaped}%'`;
+            }
+
+            // 1. Query principal con filtros
+            const queryStr = `
+              SELECT
+                il.item_id,
+                i.nombre AS item_nombre,
+                i.unidad AS item_unidad,
+                il.id AS lot_id,
+                il.lote_codigo,
+                il.fecha_ingreso,
+                COALESCE(SUM(
+                  CASE WHEN im.tipo='IN' THEN im.cantidad
+                       WHEN im.tipo='OUT' THEN -im.cantidad
+                       ELSE 0 END
+                ), 0) AS stock_actual 
+              FROM item_lots il
+              JOIN items i ON i.id = il.item_id
+              LEFT JOIN inventory_movements im ON im.lot_id = il.id AND im.item_id = il.item_id
+              WHERE 1=1
+                ${whereItemId}
+                ${whereSearch}
+              GROUP BY il.id, il.item_id, i.nombre, i.unidad, il.lote_codigo, il.fecha_ingreso
+              HAVING COALESCE(SUM(
+                  CASE WHEN im.tipo='IN' THEN im.cantidad
+                       WHEN im.tipo='OUT' THEN -im.cantidad
+                       ELSE 0 END
+                ), 0) > 0
+              ORDER BY il.fecha_ingreso DESC, il.lote_codigo ASC
+              LIMIT ${take} OFFSET ${skip}
+            `;
+
+            const rawData = await prisma.$queryRawUnsafe<any[]>(queryStr);
+
+            // 2. Calcular Total (query separada sin LIMIT/OFFSET)
+            const countQueryStr = `
+              SELECT COUNT(*) as total
+              FROM (
+                SELECT il.id
+                FROM item_lots il
+                JOIN items i ON i.id = il.item_id
+                LEFT JOIN inventory_movements im ON im.lot_id = il.id AND im.item_id = il.item_id
+                WHERE 1=1
+                  ${whereItemId}
+                  ${whereSearch}
+                GROUP BY il.id
+                HAVING COALESCE(SUM(
+                    CASE WHEN im.tipo='IN' THEN im.cantidad
+                         WHEN im.tipo='OUT' THEN -im.cantidad
+                         ELSE 0 END
+                  ), 0) > 0
+              ) AS subquery
+            `;
+            
+            const totalRows = await prisma.$queryRawUnsafe<any[]>(countQueryStr);
+            const total = Number(totalRows?.[0]?.total || 0);
+
+            // 3. ✨ Conversión limpia de tipos
+            const cleanData = rawData.map(row => ({
+                item_id: Number(row.item_id),
+                item_nombre: String(row.item_nombre),
+                item_unidad: String(row.item_unidad),
+                lot_id: Number(row.lot_id),
+                lote_codigo: String(row.lote_codigo),
+                fecha_ingreso: row.fecha_ingreso instanceof Date 
+                    ? row.fecha_ingreso.toISOString()
+                    : new Date(row.fecha_ingreso).toISOString(),
+                stock_actual: Number(row.stock_actual)
+            }));
+
+            return {
+                meta: {
+                    page: q.page,
+                    pageSize: q.pageSize,
+                    total,
+                    totalPages: Math.ceil(total / q.pageSize),
+                },
+                data: cleanData,
+            };
+
+        } catch (error) {
+            console.error("❌ Error en /item-lots/stock:", error);
+            return reply.code(500).send({ 
+                message: "Error interno al obtener stock de lotes",
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    });
+
     // Listar con paginación y filtros
     app.get('/item-lots', {
         schema: {
@@ -91,7 +211,7 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
         };
     });
 
-    // Obtener uno
+    // Obtener uno (/:id debe ir DESPUÉS de /stock)
     app.get('/item-lots/:id', {
         schema: {
             description: 'OBTENER un lote por ID',
@@ -175,66 +295,5 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             }
             throw err;
         }
-    });
-
-    // Stock por lote (FIX CRÍTICO: ::float)
-    app.get('/item-lots/stock', {
-        schema: {
-            description: 'OBTENER el stock actual de cada lote',
-            tags: ['ItemLots', 'Stock'],
-            querystring: listItemLotsQueryJsonSchema,
-            response: {
-                200: itemLotStockResponse
-            }
-        }
-    }, async (req, reply) => {
-        const parsed = listItemLotsQuery.safeParse(req.query);
-        if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
-        const q = parsed.data;
-
-        const { skip, take } = toSkipTake(q);
-
-        // FIX: Agregado ::float al SUM para que Prisma devuelva un número, no un objeto Decimal o String
-        const data = await prisma.$queryRaw<any[]>`
-          SELECT
-            il.item_id,
-            i.nombre AS item_nombre,
-            i.unidad AS item_unidad,
-            il.id AS lot_id,
-            il.lote_codigo,
-            il.fecha_ingreso,
-            COALESCE(SUM(
-              CASE WHEN im.tipo='IN' THEN im.cantidad
-                   WHEN im.tipo='OUT' THEN -im.cantidad
-                   ELSE 0 END
-            ), 0)::float AS stock_actual 
-          FROM item_lots il
-          JOIN items i ON i.id = il.item_id
-          LEFT JOIN inventory_movements im ON im.lot_id = il.id AND im.item_id = il.item_id
-          WHERE ${q.item_id ? prisma.$queryRaw`il.item_id = ${q.item_id}` : prisma.$queryRaw`TRUE`}
-            AND ${q.search ? prisma.$queryRaw`il.lote_codigo ILIKE ${'%' + q.search + '%'}` : prisma.$queryRaw`TRUE`}
-          GROUP BY il.id, il.item_id, i.nombre, i.unidad, il.lote_codigo, il.fecha_ingreso
-          ORDER BY il.fecha_ingreso DESC, il.lote_codigo ASC
-          LIMIT ${take} OFFSET ${skip}
-        `;
-
-        const totalRows = await prisma.$queryRaw<any[]>`
-          SELECT COUNT(DISTINCT il.id) AS total
-          FROM item_lots il
-          WHERE ${q.item_id ? prisma.$queryRaw`il.item_id = ${q.item_id}` : prisma.$queryRaw`TRUE`}
-            AND ${q.search ? prisma.$queryRaw`il.lote_codigo ILIKE ${'%' + q.search + '%'}` : prisma.$queryRaw`TRUE`}
-        `;
-
-        const total = Number(totalRows?.[0]?.total || 0);
-
-        return {
-            meta: {
-                page: q.page,
-                pageSize: q.pageSize,
-                total,
-                totalPages: Math.ceil(total / q.pageSize),
-            },
-            data,
-        };
     });
 }

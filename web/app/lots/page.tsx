@@ -66,6 +66,7 @@ export default async function LotsPage({
 
   let rows: LotRow[] = [];
   let total = 0;
+  let errorMsg = '';
 
   try {
     const res = await api<unknown>(`/item-lots/stock?${qp.toString()}`);
@@ -78,6 +79,7 @@ export default async function LotsPage({
     }
   } catch (err) {
     console.error('Error al obtener /item-lots/stock:', err);
+    errorMsg = err instanceof Error ? err.message : 'Error desconocido al cargar lotes';
   }
 
   const columns = [
@@ -101,6 +103,22 @@ export default async function LotsPage({
         </div>
       </div>
 
+      {/* Mostrar error si existe */}
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-red-500 text-xl">⚠️</span>
+            <div>
+              <h3 className="text-sm font-bold text-red-900">Error al cargar datos</h3>
+              <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
+              <p className="text-xs text-red-600 mt-2">
+                Verifica que tu backend esté corriendo y la base de datos conectada.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
           <span className="w-1 h-4 bg-gray-900 rounded-full"></span>
@@ -113,7 +131,13 @@ export default async function LotsPage({
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-0">
-          <DataTable columns={columns} rows={rows} />
+          {rows.length === 0 && !errorMsg ? (
+            <div className="p-12 text-center">
+              <p className="text-gray-400 text-sm">No hay lotes registrados</p>
+            </div>
+          ) : (
+            <DataTable columns={columns} rows={rows} />
+          )}
         </div>
       </div>
     </div>
