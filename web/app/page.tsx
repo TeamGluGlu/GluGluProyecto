@@ -1,3 +1,4 @@
+// web/app/page.tsx
 import { api } from '@/lib/api';
 import { KpiCard } from '@/components/KpiCard';
 import StockChart from '@/components/StockChart';
@@ -5,9 +6,8 @@ import { DataTable } from '@/components/DataTable';
 
 // --- DEFINICIÓN DE TIPOS ---
 
-// Extendemos para asegurar que tengan 'id' para la DataTable
 interface ItemData {
-  id: number;      // <--- Necesario para DataTable
+  id: number;
   item_id: number;
   item_nombre: string;
   item_unidad: string;
@@ -15,14 +15,13 @@ interface ItemData {
 }
 
 interface LowItemData {
-  id: number;      // <--- Necesario para DataTable
+  id: number;
   item_id: number;
   item_nombre: string;
   minimo: number | string;
   stock_total: number | string;
 }
 
-// Interfaces raw (crudos) que vienen de la API (sin 'id' duplicado aun)
 interface RawItemData {
   item_id: number;
   item_nombre: string;
@@ -37,36 +36,35 @@ interface RawLowItemData {
   stock_total: number | string;
 }
 
-// --- HELPER CORREGIDO (SIN ANY) ---
+// Tipo de respuesta para /stock/at-date
+interface StockAtDateResponse {
+  as_of: string;
+  data: {
+    item_id: number;
+    stock_a_fecha: number;
+  }[];
+}
+
+// --- HELPER ---
 function pickArray<T>(res: unknown): T[] {
-  // 1. Si es falsy (null, undefined, etc.), devolver array vacío
   if (!res) return [];
-
-  // 2. Si ya es un array, devolverlo casteado
   if (Array.isArray(res)) return res as T[];
-
-  // 3. Si es un objeto, verificamos de forma segura si tiene 'data'
   if (typeof res === 'object' && res !== null) {
-    // Hacemos una aserción segura a un objeto con propiedad opcional 'data'
-    // Esto es válido en TS y evita el uso de 'any'
     const wrapper = res as { data?: unknown };
-
     if (Array.isArray(wrapper.data)) {
       return wrapper.data as T[];
     }
   }
-
   return [];
 }
 
 export default async function Page() {
-  // --- ZONA DE LÓGICA ---
+  // --- CARGA DE DATOS ACTUALES (KPIs y Tablas) ---
   let items: ItemData[] = [];
   let low: LowItemData[] = [];
 
   try {
     const rawItems = pickArray<RawItemData>(await api('/stock/items'));
-    // Mapeamos para agregar 'id' (copia de item_id)
     items = rawItems.map(i => ({ ...i, id: i.item_id }));
   } catch (e) {
     console.error('Error cargando stock items:', e);
@@ -74,7 +72,6 @@ export default async function Page() {
 
   try {
     const rawLow = pickArray<RawLowItemData>(await api('/stock/low'));
-    // Mapeamos para agregar 'id' (copia de item_id)
     low = rawLow.map(i => ({ ...i, id: i.item_id }));
   } catch (e) {
     console.error('Error cargando low stock:', e);
@@ -82,27 +79,47 @@ export default async function Page() {
 
   const totalItems = items.length;
   const lowCount = low.length;
-  // Cálculo seguro del total
   const stockTotal = items.reduce((acc, i) => acc + Number(i.stock_total || 0), 0);
 
-  // Serie de datos para el gráfico (Dummy Data por ahora)
-  const days = 28;
-  const step = 4;
+  // --- GENERACIÓN DEL GRÁFICO (DATOS REALES) ---
+  // Consultamos el histórico real usando /stock/at-date
+  const days = 30; // Ventana de tiempo
+  const step = 5;  // Intervalo de días (para no saturar con 30 peticiones)
+  
   const serie = await Promise.all(
     Array.from({ length: Math.ceil(days / step) + 1 }).map(async (_, i) => {
+      // Calculamos la fecha objetivo: desde el pasado hacia hoy
       const d = new Date();
       d.setDate(d.getDate() - (days - i * step));
-      const total = 4 + i * 0.2; // Simulación
+      
+      // Formato YYYY-MM-DD para la API
+      const isoDate = d.toISOString().split('T')[0];
+      // Formato visual DD/MM para el gráfico
+      const labelDate = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+
+      let totalEnFecha = 0;
+
+      try {
+        // Llamada al endpoint real
+        // La API devuelve el stock de cada item en esa fecha, así que los sumamos.
+        const res = await api(`/stock/at-date?date=${isoDate}`) as StockAtDateResponse;
+        
+        if (res && Array.isArray(res.data)) {
+          totalEnFecha = res.data.reduce((acc, curr) => acc + Number(curr.stock_a_fecha || 0), 0);
+        }
+      } catch (err) {
+        console.error(`Error obteniendo stock para fecha ${isoDate}`, err);
+        // Si falla (ej. error de conexión), asumimos 0 o el valor anterior si quisieras refinarlo
+      }
+
       return {
-        fecha: d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }),
-        stock: total,
+        fecha: labelDate,
+        stock: totalEnFecha,
       };
     })
   );
 
-  // Columnas
-  // Usamos 'ColumnDef' implícito al pasar las props al componente DataTable
-  // pero aquí definimos la estructura con as const para inferencia
+  // --- DEFINICIÓN DE COLUMNAS ---
   const itemColumns = [
     { key: 'item_nombre', header: 'Item' },
     { key: 'item_unidad', header: 'Unidad' },
@@ -128,9 +145,10 @@ export default async function Page() {
 
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold mb-3 text-gray-700">
-          Evolución de stock (últimos 30 días)
+          Evolución de stock (últimos {days} días)
         </h2>
         <div className="h-72">
+          {/* El componente StockChart ya está preparado para recibir { fecha, stock } */}
           <StockChart data={serie} />
         </div>
       </div>
@@ -139,7 +157,6 @@ export default async function Page() {
         <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-lg font-semibold mb-3 text-gray-700">Stock por ítem</h2>
           <div className="max-h-60 overflow-y-auto">
-            {/* Ahora 'items' tiene 'id', así que DataTable no se quejará */}
             <DataTable columns={itemColumns} rows={items.slice(0, 10)} />
           </div>
           {items.length > 10 && (
