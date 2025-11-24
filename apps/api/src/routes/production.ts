@@ -112,45 +112,99 @@ export async function registerProductionRoutes(
     },
   };
 
-  // ============================================================
-  // POST /production/batches — Registrar batch completo
-  // ============================================================
-  app.post(
-    '/production/batches',
-    {
-      schema: {
-        description:
-          'REGISTRAR un nuevo batch de producción (crea un batch, consumos y movimientos OUT)',
-        tags: ['Production', 'Movements'],
-        body: CreateBatchJsonSchema,
-        response: {
-          201: BatchResponseSchema,
-          400: {
-            type: 'object',
-            properties: { message: { type: 'string' } },
-          },
-        },
+// ============================================================
+// POST /production/batches — Registrar batch completo
+// ============================================================
+app.post(
+  '/production/batches',
+  {
+    schema: {
+      description: 'REGISTRAR un nuevo batch de producción',
+      tags: ['Production', 'Movements'],
+      body: CreateBatchJsonSchema,
+      response: {
+        201: BatchResponseSchema,
+        400: { type: 'object', properties: { message: { type: 'string' } } },
+        500: { type: 'object', properties: { message: { type: 'string' }, error: { type: 'string' } } },
       },
     },
-    async (req, reply) => {
+  },
+  async (req, reply) => {
+    try {
       const body = CreateBatchSchema.parse(req.body);
-
       const fecha = body.fecha_hora ? new Date(body.fecha_hora) : new Date();
 
+      console.log('📦 Intentando crear batch con:', JSON.stringify(body, null, 2));
+
+      // 1. BUSCAR TURNO ACTIVO
+      let currentShiftId = body.shift_id;
+
+      if (!currentShiftId) {
+        console.log('🔍 Buscando turno activo...');
+        const activeShift = await prisma.shifts.findFirst({
+          where: { estado: 'ABIERTO' },
+          orderBy: { id: 'desc' },
+        });
+
+        console.log('🔍 Resultado búsqueda turno:', activeShift);
+
+        if (!activeShift) {
+          console.log('❌ No hay turno abierto');
+          return reply.code(400).send({
+            message: 'No hay un turno abierto actualmente. Inicia un turno primero.',
+          });
+        }
+        currentShiftId = activeShift.id;
+        console.log('✅ Turno encontrado:', currentShiftId);
+      }
+
+      console.log(`📝 Creating batch for Shift ID: ${currentShiftId}`);
+
       const result = await prisma.$transaction(async (tx) => {
-        // 1) Crear batch de producción
+        // 2. Verificar que el shift existe
+        const shiftExists = await tx.shifts.findUnique({
+          where: { id: currentShiftId! },
+        });
+
+        if (!shiftExists) {
+          throw new Error(`Shift con ID ${currentShiftId} no existe en la base de datos`);
+        }
+
+        console.log('✅ Shift validado:', shiftExists);
+
+        // 3. Crear Batch
+        console.log('📝 Creando batch...');
         const batch = await tx.production_batches.create({
           data: {
-            shift_id: body.shift_id ?? 1, // Ajusta según lógica real
+            shift_id: currentShiftId!,
             fecha_hora: fecha,
             bidones_llenados: body.bidones_llenados,
             observacion: body.observacion ?? null,
           },
         });
 
-        // 2) Registrar consumos + movimientos OUT
+        console.log('✅ Batch creado:', batch.id);
+
+        // 4. Crear Consumos y Movimientos
         for (const line of body.consumptions) {
-          // Registrar consumo
+          console.log(`📦 Procesando consumo: item ${line.item_id}, lot ${line.lot_id}, cantidad ${line.cantidad}`);
+
+          // Validar que el lote existe y pertenece al item correcto
+          const lot = await tx.item_lots.findUnique({
+            where: { id: line.lot_id },
+          });
+
+          if (!lot) {
+            throw new Error(`Lote ${line.lot_id} no encontrado`);
+          }
+
+          if (lot.item_id !== line.item_id) {
+            throw new Error(`Lote ${line.lot_id} no pertenece al item ${line.item_id}`);
+          }
+
+          console.log(`✅ Lote validado: ${lot.lote_codigo}`);
+
+          // A) Registrar Consumo (SIN turno_id)
           await tx.production_consumptions.create({
             data: {
               batch_id: batch.id,
@@ -160,7 +214,9 @@ export async function registerProductionRoutes(
             },
           });
 
-          // Registrar movimiento de inventario (OUT)
+          console.log(`✅ Consumo registrado para item ${line.item_id}`);
+
+          // B) Registrar Movimiento OUT (CON turno_id)
           await tx.inventory_movements.create({
             data: {
               item_id: line.item_id,
@@ -170,17 +226,53 @@ export async function registerProductionRoutes(
               cantidad: line.cantidad,
               ref_tipo: 'BATCH',
               ref_id: batch.id,
-              turno_id: body.shift_id ?? null,
+              turno_id: currentShiftId,
               fecha_hora: fecha,
               observacion: body.observacion ?? null,
             },
           });
+
+          console.log(`✅ Movimiento OUT registrado para item ${line.item_id}`);
         }
+
+        console.log('✅ Todos los consumos y movimientos procesados');
 
         return batch;
       });
 
+      console.log('🎉 Batch creado exitosamente:', result.id);
       return reply.code(201).send(result);
+
+    } catch (error: any) {
+      console.error('❌ ERROR AL CREAR BATCH:', error);
+      console.error('Stack trace:', error.stack);
+
+      // Distinguir tipos de error
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          message: 'Datos de entrada inválidos',
+          error: JSON.stringify(error.errors),
+        });
+      }
+
+      if (error.code === 'P2003') {
+        return reply.code(400).send({
+          message: 'Referencia inválida: uno de los IDs no existe en la base de datos',
+          error: error.meta?.field_name || error.message,
+        });
+      }
+
+      if (error.code === 'P2002') {
+        return reply.code(400).send({
+          message: 'Violación de constraint único',
+          error: error.message,
+        });
+      }
+
+      return reply.code(500).send({
+        message: 'Error interno al procesar el batch',
+        error: error.message,
+      });
     }
-  );
-}
+  }
+);}
