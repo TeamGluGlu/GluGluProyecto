@@ -1,17 +1,15 @@
 // apps/api/src/routes/itemLots.ts
 import { FastifyInstance } from 'fastify';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { 
     createItemLotJsonSchema, 
-    updateItemLotJsonSchema, 
     listItemLotsQueryJsonSchema,
     itemLotBaseSchema,
     itemLotListResponseSchema,
-    listItemLotsQuery,
-    updateItemLotSchema
+    listItemLotsQuery
 } from '../schemas/itemLots.js';
-import { toSkipTake, paginationMetaSchema } from '../schemas/common.js';
+import { toSkipTake } from '../schemas/common.js';
 
 const idParamJsonSchema = {
     type: 'object',
@@ -19,39 +17,16 @@ const idParamJsonSchema = {
     required: ['id']
 };
 
-const itemLotStockResponse = {
-    type: 'object',
-    properties: {
-        meta: paginationMetaSchema,
-        data: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    item_id: { type: 'number' },
-                    item_nombre: { type: 'string' },
-                    item_unidad: { type: 'string' },
-                    lot_id: { type: 'number' },
-                    lote_codigo: { type: 'string' },
-                    fecha_ingreso: { type: 'string', format: 'date-time' },
-                    stock_actual: { type: 'number' }
-                }
-            }
-        }
-    }
-};
-
 export async function registerItemLotsRoutes(app: FastifyInstance, prisma: PrismaClient) {
     
-    // ⚠️ CRÍTICO: Stock por lote PRIMERO (antes de /:id)
+    // ⚠️ CRÍTICO: Endpoint de Stock
+    // HEMOS ELIMINADO 'response: { 200: ... }' AQUÍ PARA EVITAR EL ERROR 500
     app.get('/item-lots/stock', {
         schema: {
             description: 'OBTENER el stock actual de cada lote',
             tags: ['ItemLots', 'Stock'],
             querystring: listItemLotsQueryJsonSchema,
-            response: {
-                200: itemLotStockResponse
-            }
+            // ¡OJO! No poner 'response' aquí para evitar errores de serialización con BigInt/Decimal
         }
     }, async (req, reply) => {
         try {
@@ -61,7 +36,6 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
 
             const { skip, take } = toSkipTake(q);
 
-            // Construir condiciones WHERE dinámicas
             let whereItemId = '';
             let whereSearch = '';
             
@@ -70,12 +44,11 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             }
             
             if (q.search) {
-                // Escapar comillas simples para SQL
                 const searchEscaped = q.search.replace(/'/g, "''");
                 whereSearch = `AND il.lote_codigo ILIKE '%${searchEscaped}%'`;
             }
 
-            // 1. Query principal con filtros
+            // 1. Query principal
             const queryStr = `
               SELECT
                 il.item_id,
@@ -107,7 +80,7 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
 
             const rawData = await prisma.$queryRawUnsafe<any[]>(queryStr);
 
-            // 2. Calcular Total (query separada sin LIMIT/OFFSET)
+            // 2. Calcular Total
             const countQueryStr = `
               SELECT COUNT(*) as total
               FROM (
@@ -130,20 +103,20 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             const totalRows = await prisma.$queryRawUnsafe<any[]>(countQueryStr);
             const total = Number(totalRows?.[0]?.total || 0);
 
-            // 3. ✨ Conversión limpia de tipos
+            // 3. Conversión segura
             const cleanData = rawData.map(row => ({
                 item_id: Number(row.item_id),
-                item_nombre: String(row.item_nombre),
-                item_unidad: String(row.item_unidad),
+                item_nombre: String(row.item_nombre || ''),
+                item_unidad: String(row.item_unidad || 'UND'),
                 lot_id: Number(row.lot_id),
-                lote_codigo: String(row.lote_codigo),
+                lote_codigo: String(row.lote_codigo || ''),
                 fecha_ingreso: row.fecha_ingreso instanceof Date 
                     ? row.fecha_ingreso.toISOString()
                     : new Date(row.fecha_ingreso).toISOString(),
-                stock_actual: Number(row.stock_actual)
+                stock_actual: Number(row.stock_actual) || 0 
             }));
 
-            return {
+            return reply.send({
                 meta: {
                     page: q.page,
                     pageSize: q.pageSize,
@@ -151,10 +124,10 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
                     totalPages: Math.ceil(total / q.pageSize),
                 },
                 data: cleanData,
-            };
+            });
 
         } catch (error) {
-            console.error("❌ Error en /item-lots/stock:", error);
+            app.log.error(error);
             return reply.code(500).send({ 
                 message: "Error interno al obtener stock de lotes",
                 error: error instanceof Error ? error.message : String(error)
@@ -162,21 +135,18 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
         }
     });
 
-    // Listar con paginación y filtros
+    // Listar simple (items)
     app.get('/item-lots', {
         schema: {
             description: 'LISTAR lotes con stock, paginación y filtros',
             tags: ['ItemLots'],
             querystring: listItemLotsQueryJsonSchema,
-            response: {
-                200: itemLotListResponseSchema
-            }
+            response: { 200: itemLotListResponseSchema }
         }
     }, async (req, reply) => {
         const parsed = listItemLotsQuery.safeParse(req.query);
         if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
         const q = parsed.data;
-
         const where: any = {};
         if (q.item_id) where.item_id = q.item_id;
         if (q.search) where.lote_codigo = { contains: q.search, mode: 'insensitive' };
@@ -185,46 +155,31 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             if (q.from) (where.fecha_ingreso as any).gte = q.from;
             if (q.to) (where.fecha_ingreso as any).lte = q.to;
         }
-
+        
         const { skip, take } = toSkipTake(q);
         const [total, rows] = await Promise.all([
             prisma.item_lots.count({ where }),
             prisma.item_lots.findMany({
                 where,
                 orderBy: { [q.orderBy]: q.orderDir },
-                skip,
-                take,
-                include: {
-                    items: { select: { id: true, nombre: true, unidad: true, tipo: true } }
-                }
+                skip, take,
+                include: { items: { select: { id: true, nombre: true, unidad: true, tipo: true } } }
             }),
         ]);
-
         return {
-            meta: {
-                page: q.page,
-                pageSize: q.pageSize,
-                total,
-                totalPages: Math.ceil(total / q.pageSize),
-            },
+            meta: { page: q.page, pageSize: q.pageSize, total, totalPages: Math.ceil(total / q.pageSize) },
             data: rows,
         };
     });
 
-    // Obtener uno (/:id debe ir DESPUÉS de /stock)
+    // Obtener uno por ID
     app.get('/item-lots/:id', {
         schema: {
             description: 'OBTENER un lote por ID',
             tags: ['ItemLots'],
             params: idParamJsonSchema,
             response: {
-                200: {
-                    ...itemLotBaseSchema,
-                    properties: {
-                        ...itemLotBaseSchema.properties,
-                        items: { type: 'object', properties: { id: { type: 'number' }, nombre: { type: 'string' }, unidad: { type: 'string' }, tipo: { type: 'string' } } }
-                    }
-                },
+                200: { ...itemLotBaseSchema, properties: { ...itemLotBaseSchema.properties, items: { type: 'object', properties: { id: { type: 'number' }, nombre: { type: 'string' }, unidad: { type: 'string' }, tipo: { type: 'string' } } } } },
                 404: { type: 'object', properties: { message: { type: 'string' } } }
             }
         }
@@ -238,10 +193,10 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
         return row;
     });
 
-    // Crear
+    // Crear Lote
     app.post('/item-lots', {
         schema: {
-            description: 'CREAR un nuevo lote y su movimiento de inventario inicial',
+            description: 'CREAR un nuevo lote',
             tags: ['ItemLots'],
             body: createItemLotJsonSchema,
             response: {

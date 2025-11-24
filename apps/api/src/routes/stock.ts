@@ -21,18 +21,20 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
             item_id: { type: 'number' },
             item_nombre: { type: 'string' },
             unidad: { type: 'string' },
-            stock_total: { type: 'number', description: 'Stock total (BigInt serializado a number)' },
+            stock_total: { type: 'number', description: 'Stock total' },
         }
     };
+    
+    // MODIFICADO: Hacemos 'minimo_alerta' siempre número (0 si es null) para evitar errores de serialización
     const lowStockItemResponse = {
         ...stockItemResponse,
         properties: {
             ...stockItemResponse.properties,
-            minimo_alerta: { type: 'number', nullable: true },
+            minimo_alerta: { type: 'number' }, 
         }
     };
 
-  // A) Verifica conexión SMTP (NO envía correo)
+  // A) Verifica conexión SMTP
   app.get('/dev/mail-verify', {
         schema: {
             description: 'Verifica la conexión con el servidor SMTP',
@@ -52,7 +54,7 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
     }
   });
 
-  // B) Envía un correo de prueba simple
+  // B) Envía un correo de prueba
   app.post('/dev/mail-test', {
         schema: {
             description: 'Envía un correo de prueba simple',
@@ -60,9 +62,9 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
             body: {
                 type: 'object',
                 properties: {
-                    to: { type: 'string', description: 'Destinatario(s) (separados por coma)' },
+                    to: { type: 'string' },
                     subject: { type: 'string', default: 'Prueba de correo - GluGlu' },
-                    html: { type: 'string', default: '<b>Hola!</b> Este es un test de correo desde GluGlu.' }
+                    html: { type: 'string', default: '<b>Hola!</b> Este es un test.' }
                 },
                 required: ['to']
             },
@@ -76,7 +78,7 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
     const schema = z.object({
       to: z.string().min(3),
       subject: z.string().default('Prueba de correo - GluGlu'),
-      html: z.string().default('<b>Hola!</b> Este es un test de correo desde GluGlu.')
+      html: z.string().default('<b>Hola!</b> Este es un test.')
     });
     const parsed = schema.safeParse(req.body || {});
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
@@ -92,7 +94,7 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
     }
   });
 
-  // ✅ Stock total por ítem - CORREGIDO
+  // ✅ Stock total por ítem
   app.get('/stock/items', {
         schema: {
             description: 'OBTENER el stock total consolidado por ítem',
@@ -122,17 +124,16 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
         ORDER BY i.nombre ASC
       `;
 
-      // ✨ Conversión segura de Decimal/BigInt a Number
       const cleanData = result.map(row => ({
         item_id: Number(row.item_id),
-        item_nombre: String(row.item_nombre),
-        unidad: String(row.unidad),
-        stock_total: Number(row.stock_total)
+        item_nombre: String(row.item_nombre || ''),
+        unidad: String(row.unidad || 'UND'),
+        stock_total: Number(row.stock_total) || 0
       }));
 
       return reply.code(200).send({ data: cleanData });
     } catch (error) {
-      console.error('❌ Error en /stock/items:', error);
+      app.log.error(error);
       return reply.code(500).send({ 
         message: 'Error interno al obtener stock',
         error: error instanceof Error ? error.message : String(error)
@@ -176,18 +177,18 @@ export async function registerStockRoutes(app: FastifyInstance, prisma: PrismaCl
         ), 0) < COALESCE(t.minimo_alerta, 0)
       `;
 
-      // ✨ Conversión segura de Decimal/BigInt a Number
+      // ✨ Conversión segura: Si es null, enviamos 0 para cumplir con el schema 'number'
       const cleanData = result.map(row => ({
         item_id: Number(row.item_id),
-        item_nombre: String(row.item_nombre),
-        unidad: String(row.unidad),
-        minimo_alerta: row.minimo_alerta ? Number(row.minimo_alerta) : null,
-        stock_total: Number(row.stock_total)
+        item_nombre: String(row.item_nombre || ''),
+        unidad: String(row.unidad || 'UND'),
+        minimo_alerta: row.minimo_alerta ? Number(row.minimo_alerta) : 0,
+        stock_total: Number(row.stock_total) || 0
       }));
 
       return reply.code(200).send({ data: cleanData });
     } catch (error) {
-      console.error('❌ Error en /stock/low:', error);
+      app.log.error(error);
       return reply.code(500).send({ 
         message: 'Error interno al obtener alertas de stock',
         error: error instanceof Error ? error.message : String(error)

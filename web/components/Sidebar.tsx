@@ -1,4 +1,3 @@
-// web/components/Sidebar.tsx (Con Iconos Vectoriales Monocromáticos)
 'use client';
 
 import Link from 'next/link';
@@ -6,21 +5,20 @@ import { usePathname } from 'next/navigation';
 
 // --- NUEVOS ÍCONOS SVG (Estilo monocromático y minimalista) ---
 const MenuIcon = ({ name, isActive }: { name: string; isActive: boolean }) => {
-    // Definimos el color según si el link está activo (Blanco) o inactivo (Gris)
     const colorClass = isActive ? 'text-white' : 'text-slate-400 group-hover:text-white';
     
     let iconPath;
 
     if (name === 'Dashboard') {
-        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7m-7-7v12" />; // Home
+        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7m-7-7v12" />; 
     } else if (name === 'Productos') {
-        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M20 7L4 7M4 7l4-4m-4 4l4 4m0 0l4-4m-4 4h12M12 11v9" />; // Box/Products
+        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M20 7L4 7M4 7l4-4m-4 4l4 4m0 0l4-4m-4 4h12M12 11v9" />; 
     } else if (name === 'Lotes') {
-        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />; // Documents/Lotes
+        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />; 
     } else if (name === 'Movimientos') {
-        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />; // Arrows/Movements
+        iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />; 
     } else if (name === 'Reportes') {
-        // LÍNEA CORREGIDA (La pegas)
+        // Ícono de Reportes (Chart Bar)
         iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 4h4.896c.032 0 .064-.002.096-.004M21 21v-4a2 2 0 00-2-2h-2a2 2 0 00-2 2v4a2 2 0 002 2h2a2 2 0 002-2zm-2-2h-2m-4 4h2" />;
     } else {
         iconPath = <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />;
@@ -40,7 +38,7 @@ const links = [
     { href: '/items', label: 'Productos', name: 'Productos' },
     { href: '/lots', label: 'Lotes / Stock', name: 'Lotes' },
     { href: '/movements', label: 'Movimientos', name: 'Movimientos' },
-    { href: '/reports/aging', label: 'Reportes', name: 'Reportes' },
+    { href: '/reports', label: 'Reportes', name: 'Reportes' }, // <--- CORREGIDO AQUÍ
 ];
 
 export default function Sidebar() {
@@ -81,7 +79,8 @@ export default function Sidebar() {
             <nav className="flex-1 px-6 space-y-2">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 pl-4">General</p>
                 {links.map((link) => {
-                    const isActive = pathname === link.href;
+                    // Lógica para que /reports/aging también active el botón de /reports
+                    const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
                     return (
                         <Link 
                             key={link.href} 
