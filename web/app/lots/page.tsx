@@ -91,7 +91,7 @@ export default async function LotsPage({
   return (
     <div className="w-full min-h-screen space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
+        <div className='mt-10'>
           <h1 className="text-2xl font-bold text-gray-900">Gestión de Lotes</h1>
           <p className="text-sm text-gray-500 mt-1">Inventario detallado por lote</p>
         </div>
