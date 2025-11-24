@@ -3,8 +3,10 @@ import { Filters } from '@/components/Filters';
 import { DataTable } from '@/components/DataTable';
 import LotForm from '@/components/LotForm';
 
-// Definición estricta
-type LotRow = {
+// --- DEFINICIÓN DE TIPOS ---
+
+// 1. Lo que viene crudo de la API (sin 'id' obligatorio de frontend)
+interface RawLot {
   item_id: number;
   item_nombre: string;
   item_unidad: string;
@@ -12,43 +14,48 @@ type LotRow = {
   lote_codigo: string;
   fecha_ingreso: string;
   stock_actual: number | string;
-};
+}
 
-// Respuesta API
-type LotApiResponse = {
-  data: {
-    item_id: number;
-    item_nombre: string;
-    item_unidad: string;
-    lot_id: number;
-    lote_codigo: string;
-    fecha_ingreso: string;
-    stock_actual: number | string;
-  }[];
-  meta?: {
-    total: number;
-  };
-};
+// 2. Lo que usa la Tabla (con 'id' obligatorio)
+interface LotRow {
+  id: number; // <--- ¡ESTO FALTABA! La DataTable lo necesita.
+  item_id: number;
+  item_nombre: string;
+  item_unidad: string;
+  lot_id: number;
+  lote_codigo: string;
+  fecha_ingreso: string;
+  stock_actual: number | string;
+}
 
-// Helper seguro
+// Helper seguro y tipado (sin any)
 function getRowsSafe(res: unknown): LotRow[] {
   if (!res || typeof res !== 'object') return [];
-  
-  if (Array.isArray(res)) return res as LotRow[];
-  
-  if ('data' in res && Array.isArray((res as LotApiResponse).data)) {
-    return (res as LotApiResponse).data.map(item => ({
-      ...item,
-      stock_actual: Number(item.stock_actual),
-      fecha_ingreso: item.fecha_ingreso 
-        ? new Date(item.fecha_ingreso).toLocaleDateString('es-PE', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-          })
-        : '-',
-    }));
+
+  let data: RawLot[] = [];
+
+  // Detectamos si es un array directo o viene dentro de { data: ... }
+  if (Array.isArray(res)) {
+    data = res as RawLot[];
+  } else if ('data' in res && Array.isArray((res as { data: unknown }).data)) {
+    data = (res as { data: RawLot[] }).data;
+  } else {
+    return [];
   }
-  
-  return [];
+
+  // Mapeamos para agregar 'id' y formatear
+  return data.map((item) => ({
+    ...item,
+    id: item.lot_id, // <--- Aquí asignamos el ID único para la tabla
+    stock_actual: Number(item.stock_actual),
+    fecha_ingreso: item.fecha_ingreso
+      ? new Date(item.fecha_ingreso).toLocaleDateString('es-PE', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        })
+      : '-',
+  }));
 }
 
 export default async function LotsPage({
@@ -57,7 +64,7 @@ export default async function LotsPage({
   searchParams: Promise<{ [k: string]: string | undefined }>;
 }) {
   const sp = await searchParams;
-  
+
   const qp = new URLSearchParams();
   if (sp?.item_id) qp.set('item_id', sp.item_id);
   if (sp?.search) qp.set('search', sp.search);
@@ -69,15 +76,16 @@ export default async function LotsPage({
   let errorMsg = '';
 
   try {
+    // Usamos unknown para ser estrictos con el tipo
     const res = await api<unknown>(`/item-lots/stock?${qp.toString()}`);
     rows = getRowsSafe(res);
-    
+
     if (res && typeof res === 'object' && 'meta' in res) {
       total = (res as { meta: { total: number } }).meta.total;
     } else {
       total = rows.length;
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error al obtener /item-lots/stock:', err);
     errorMsg = err instanceof Error ? err.message : 'Error desconocido al cargar lotes';
   }
@@ -93,12 +101,14 @@ export default async function LotsPage({
   return (
     <div className="w-full min-h-screen space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className='mt-10'>
+        <div className="mt-10">
           <h1 className="text-2xl font-bold text-gray-900">Gestión de Lotes</h1>
           <p className="text-sm text-gray-500 mt-1">Inventario detallado por lote</p>
         </div>
         <div className="bg-white px-5 py-2 rounded-xl border border-gray-200 shadow-sm flex items-center gap-3">
-          <span className="text-xs text-gray-500 font-bold uppercase tracking-wide">Total Lotes</span>
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-wide">
+            Total Lotes
+          </span>
           <div className="text-2xl font-bold text-gray-900">{total}</div>
         </div>
       </div>
