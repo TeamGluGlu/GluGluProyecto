@@ -18,8 +18,7 @@ interface AuthContextType {
 
 // Definimos la URL base aquí. 
 // Intentará usar la variable de entorno primero; si no existe, usa tu URL de Render directa.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://glugluproyecto.onrender.com';
-
+const API_URL = 'https://gluglu-api.onrender.com';
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
