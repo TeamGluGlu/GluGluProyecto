@@ -22,6 +22,43 @@ export async function registerProductionRoutes(
       return { ok: true, msg: 'Rutas de producción activas' };
     }
   );
+  // ============================================================
+  // NUEVA RUTA: GET /production/today — Total producido hoy
+  // ============================================================
+  app.get('/production/today', {
+    schema: {
+      description: 'Obtiene el total de bidones producidos en el día actual',
+      tags: ['Production'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' }
+          }
+        }
+      }
+    }
+  }, async (_req, reply) => {
+    const now = new Date();
+    // Definir inicio y fin del día actual (00:00:00 a 23:59:59)
+    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+
+    const result = await prisma.production_batches.aggregate({
+      _sum: {
+        bidones_llenados: true
+      },
+      where: {
+        fecha_hora: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      }
+    });
+
+    // Si es null (no hubo producción), devolvemos 0
+    return { total: result._sum.bidones_llenados || 0 };
+  });
 // ============================================================
 // Schemas Zod y JSON Schema
 // ============================================================
@@ -129,224 +166,148 @@ const BatchResponseSchema = {
 };
 
 // ============================================================
-// POST /production/batches — Registrar batch completo
-// ============================================================
-app.post(
-  '/production/batches',
-  {
-    schema: {
-      description: 'REGISTRAR un nuevo batch de producción',
-      tags: ['Production', 'Movements'],
-      body: CreateBatchJsonSchema,
-      response: {
-        201: BatchResponseSchema,
-        400: { type: 'object', properties: { message: { type: 'string' } } },
-        500: { type: 'object', properties: { message: { type: 'string' }, error: { type: 'string' } } },
+  // POST /production/batches — Registrar batch completo
+  // ============================================================
+  app.post(
+    '/production/batches',
+    {
+      schema: {
+        body: CreateBatchJsonSchema,
       },
     },
-  },
-  async (req, reply) => {
-    try {
-      const body = CreateBatchSchema.parse(req.body);
-      const fecha = body.fecha_hora ? new Date(body.fecha_hora) : new Date();
+    async (req, reply) => {
+      try {
+        const body = CreateBatchSchema.parse(req.body);
+        const fecha = body.fecha_hora ? new Date(body.fecha_hora) : new Date();
 
-      console.log('📦 Intentando crear batch con:', JSON.stringify(body, null, 2));
+        console.log('📦 Creando batch:', { ...body, fecha });
 
-      // 1. BUSCAR TURNO ACTIVO
-      let currentShiftId = body.shift_id;
-
-      if (!currentShiftId) {
-        console.log('🔍 Buscando turno activo...');
-        const activeShift = await prisma.shifts.findFirst({
-          where: { estado: 'ABIERTO' },
-          orderBy: { id: 'desc' },
-        });
-
-        console.log('🔍 Resultado búsqueda turno:', activeShift);
-
-        if (!activeShift) {
-          console.log('❌ No hay turno abierto');
-          return reply.code(400).send({
-            message: 'No hay un turno abierto actualmente. Inicia un turno primero.',
-          });
-        }
-        currentShiftId = activeShift.id;
-        console.log('✅ Turno encontrado:', currentShiftId);
-      }
-
-      console.log(`📝 Creating batch for Shift ID: ${currentShiftId}`);
-
-      const result = await prisma.$transaction(async (tx) => {
-        // 2. Verificar que el shift existe
-        const shiftExists = await tx.shifts.findUnique({
-          where: { id: currentShiftId! },
-        });
-
-        if (!shiftExists) {
-          throw new Error(`Shift con ID ${currentShiftId} no existe en la base de datos`);
-        }
-
-        console.log('✅ Shift validado:', shiftExists);
-
-        // 3. Verificar que el item de bidón existe
-        const bidonItem = await tx.items.findUnique({
-          where: { id: body.bidon_item_id },
-        });
-
-        if (!bidonItem) {
-          throw new Error(`Item de bidón con ID ${body.bidon_item_id} no encontrado`);
-        }
-
-        console.log('✅ Item de bidón validado:', bidonItem.nombre);
-
-        // 4. Crear o buscar el lote para los bidones producidos
-        const fechaIngreso = new Date(fecha);
-        fechaIngreso.setHours(0, 0, 0, 0); // Solo fecha, sin hora
-
-        let bidonLot = await tx.item_lots.findFirst({
-          where: {
-            item_id: body.bidon_item_id,
-            lote_codigo: body.bidon_lote_codigo,
-          },
-        });
-
-        if (!bidonLot) {
-          console.log('📦 Creando nuevo lote para bidones...');
-          bidonLot = await tx.item_lots.create({
-            data: {
-              item_id: body.bidon_item_id,
-              lote_codigo: body.bidon_lote_codigo,
-              fecha_ingreso: fechaIngreso,
-              costo_lote: 0, // Podrías calcularlo basado en los consumos
-              cantidad_inicial: body.bidones_llenados,
-            },
-          });
-          console.log('✅ Lote de bidones creado:', bidonLot.id);
-        }
-
-        // 5. Crear Batch
-        console.log('📝 Creando batch...');
-        const batch = await tx.production_batches.create({
-          data: {
-            shift_id: currentShiftId!,
-            fecha_hora: fecha,
-            bidones_llenados: body.bidones_llenados,
-            observacion: body.observacion ?? null,
-          },
-        });
-
-        console.log('✅ Batch creado:', batch.id);
-
-        // 6. Procesar CONSUMOS (materias primas) - SALEN del inventario
-        for (const line of body.consumptions) {
-          console.log(`📦 Procesando consumo: item ${line.item_id}, lot ${line.lot_id}, cantidad ${line.cantidad}`);
-
-          // Validar que el lote existe y pertenece al item correcto
-          const lot = await tx.item_lots.findUnique({
-            where: { id: line.lot_id },
+        // 1. BUSCAR TURNO ACTIVO
+        let currentShiftId = body.shift_id;
+        if (!currentShiftId) {
+          const activeShift = await prisma.shifts.findFirst({
+            where: { estado: 'ABIERTO' },
+            orderBy: { id: 'desc' },
           });
 
-          if (!lot) {
-            throw new Error(`Lote ${line.lot_id} no encontrado`);
+          if (!activeShift) {
+            return reply.code(400).send({
+              message: 'No hay turno abierto. Abre un turno en /shifts primero.',
+            });
+          }
+          currentShiftId = activeShift.id;
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+          // 2. Validar existencias
+          const shiftExists = await tx.shifts.findUnique({ where: { id: currentShiftId! } });
+          if (!shiftExists) throw new Error(`Turno ID ${currentShiftId} no existe`);
+
+          const bidonItem = await tx.items.findUnique({ where: { id: body.bidon_item_id } });
+          if (!bidonItem) throw new Error(`Item Bidón ID ${body.bidon_item_id} no existe`);
+
+          // 3. Crear/Buscar Lote de Bidones
+          // Usamos findFirst para evitar error unique constraint si ya existe
+          let bidonLot = await tx.item_lots.findFirst({
+            where: { item_id: body.bidon_item_id, lote_codigo: body.bidon_lote_codigo },
+          });
+
+          if (!bidonLot) {
+            const fechaIngreso = new Date(fecha);
+            fechaIngreso.setHours(0, 0, 0, 0);
+            
+            bidonLot = await tx.item_lots.create({
+              data: {
+                item_id: body.bidon_item_id,
+                lote_codigo: body.bidon_lote_codigo,
+                fecha_ingreso: fechaIngreso,
+                costo_lote: 0, 
+                cantidad_inicial: body.bidones_llenados,
+              },
+            });
           }
 
-          if (lot.item_id !== line.item_id) {
-            throw new Error(`Lote ${line.lot_id} no pertenece al item ${line.item_id}`);
-          }
-
-          console.log(`✅ Lote validado: ${lot.lote_codigo}`);
-
-          // A) Registrar Consumo (SIN turno_id)
-          await tx.production_consumptions.create({
+          // 4. Crear Batch
+          const batch = await tx.production_batches.create({
             data: {
-              batch_id: batch.id,
-              item_id: line.item_id,
-              lot_id: line.lot_id,
-              cantidad: line.cantidad,
-            },
-          });
-
-          console.log(`✅ Consumo registrado para item ${line.item_id}`);
-
-          // B) Registrar Movimiento OUT (CON turno_id) - RESTA del stock
-          await tx.inventory_movements.create({
-            data: {
-              item_id: line.item_id,
-              lot_id: line.lot_id,
-              tipo: 'OUT',
-              motivo: 'USO_PRODUCCION',
-              cantidad: line.cantidad,
-              ref_tipo: 'BATCH',
-              ref_id: batch.id,
-              turno_id: currentShiftId,
+              shift_id: currentShiftId!,
               fecha_hora: fecha,
+              bidones_llenados: body.bidones_llenados,
               observacion: body.observacion ?? null,
             },
           });
 
-          console.log(`✅ Movimiento OUT registrado para item ${line.item_id}`);
-        }
+          // 5. Procesar Consumos
+          for (const line of body.consumptions) {
+            const lot = await tx.item_lots.findUnique({ where: { id: line.lot_id } });
+            if (!lot) throw new Error(`Lote origen ID ${line.lot_id} no encontrado`);
+            if (lot.item_id !== line.item_id) throw new Error(`Lote ${lot.lote_codigo} no es del item ${line.item_id}`);
 
-        // 7. Registrar ENTRADA de bidones producidos - SUMA al stock
-        console.log(`🏭 Registrando entrada de ${body.bidones_llenados} bidones...`);
+            // Registrar consumo
+            await tx.production_consumptions.create({
+              data: {
+                batch_id: batch.id,
+                item_id: line.item_id,
+                lot_id: line.lot_id,
+                cantidad: line.cantidad,
+              },
+            });
+
+            // Registrar Movimiento OUT
+            await tx.inventory_movements.create({
+              data: {
+                item_id: line.item_id,
+                lot_id: line.lot_id,
+                tipo: 'OUT',
+                motivo: 'USO_PRODUCCION',
+                cantidad: line.cantidad,
+                ref_tipo: 'BATCH',
+                ref_id: batch.id,
+                turno_id: currentShiftId,
+                fecha_hora: fecha,
+                observacion: body.observacion ?? null,
+              },
+            });
+          }
+
+          // 6. Registrar Entrada de Bidones (IN)
+          await tx.inventory_movements.create({
+            data: {
+              item_id: body.bidon_item_id,
+              lot_id: bidonLot!.id,
+              tipo: 'IN',
+              motivo: 'PRODUCCION',
+              cantidad: body.bidones_llenados,
+              ref_tipo: 'BATCH',
+              ref_id: batch.id,
+              turno_id: currentShiftId,
+              fecha_hora: fecha,
+              observacion: `Producción Batch #${batch.id}`,
+            },
+          });
+
+          return { ...batch, bidon_lot_id: bidonLot!.id };
+        });
+
+        console.log('✅ Batch creado ID:', result.id);
+        return reply.code(201).send(result);
+
+      } catch (error: any) {
+        console.error('❌ ERROR AL CREAR BATCH:', error);
         
-        await tx.inventory_movements.create({
-          data: {
-            item_id: body.bidon_item_id,
-            lot_id: bidonLot.id,
-            tipo: 'IN',
-            motivo: 'PRODUCCION',
-            cantidad: body.bidones_llenados,
-            ref_tipo: 'BATCH',
-            ref_id: batch.id,
-            turno_id: currentShiftId,
-            fecha_hora: fecha,
-            observacion: `Producción de batch #${batch.id}`,
-          },
-        });
-
-        console.log('✅ Entrada de bidones registrada');
-        console.log('✅ Todos los consumos y movimientos procesados');
-
-        return {
-          ...batch,
-          bidon_lot_id: bidonLot.id,
-        };
-      });
-
-      console.log('🎉 Batch creado exitosamente:', result.id);
-      return reply.code(201).send(result);
-
-    } catch (error: any) {
-      console.error('❌ ERROR AL CREAR BATCH:', error);
-      console.error('Stack trace:', error.stack);
-
-      // Distinguir tipos de error
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({
-          message: 'Datos de entrada inválidos',
-          error: JSON.stringify(error.errors),
+        // CORRECCIÓN CLAVE: Enviamos el detalle del error en 'message' para que el frontend lo muestre
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        
+        if (error instanceof z.ZodError) {
+            return reply.code(400).send({ message: 'Datos inválidos', error: error.errors });
+        }
+        
+        // Devolvemos 500 pero con el mensaje específico
+        return reply.code(500).send({ 
+            message: `Error interno: ${errorMsg}`, 
+            error: errorMsg 
         });
       }
-
-      if (error.code === 'P2003') {
-        return reply.code(400).send({
-          message: 'Referencia inválida: uno de los IDs no existe en la base de datos',
-          error: error.meta?.field_name || error.message,
-        });
-      }
-
-      if (error.code === 'P2002') {
-        return reply.code(400).send({
-          message: 'Violación de constraint único',
-          error: error.message,
-        });
-      }
-
-      return reply.code(500).send({
-        message: 'Error interno al procesar el batch',
-        error: error.message,
-      });
     }
-  }
-);}
+  );
+}
