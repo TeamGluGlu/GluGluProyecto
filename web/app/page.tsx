@@ -104,7 +104,7 @@ export default async function Page() {
   return (
     <div className="space-y-4">
       {/* 1. Título */}
-      <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-3">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mt-10 mb-3">Dashboard</h1>
 
       {/* 2. KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

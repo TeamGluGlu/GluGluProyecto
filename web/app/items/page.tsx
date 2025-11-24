@@ -76,8 +76,8 @@ export default async function ItemsPage() {
   ] as const;
 
   return (
-    <div className="space-y-6"> {/* Aumenté un poco el espacio vertical */}
-      <h1 className="text-2xl font-bold text-gray-900">Gestión de Items</h1> {/* Título mejorado (oscuro) */}
+    <div className="space-y-1"> {/* Aumenté un poco el espacio vertical */}
+      <h1 className="text-2xl font-bold text-gray-900 mt-4">Gestión de Items</h1> {/* Título mejorado (oscuro) */}
       <ItemForm />
       
       {/* Contenedor de la tabla con fondo blanco y sombra para consistencia */}

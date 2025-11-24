@@ -3,27 +3,76 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 export function Filters() {
-    const router = useRouter();
-    const sp = useSearchParams();
-    const [itemId, setItemId] = useState<string>(sp.get('item_id') || '');
-    const [lot, setLot] = useState<string>(sp.get('lote_codigo') || '');
+  const router = useRouter();
+  const sp = useSearchParams();
+  
+  // Estado local para los inputs
+  const [itemId, setItemId] = useState<string>(sp.get('item_id') || '');
+  const [search, setSearch] = useState<string>(sp.get('search') || ''); // Cambié 'lote' por 'search' para coincidir con tu API
 
-return (
-    <div className="flex flex-wrap gap-2 items-end">
-        <div>
-            <label className="text-xs text-gray-500">Item ID</label>
-            <input className="border rounded-lg px-3 py-2 w-36" value={itemId} onChange={e=>setItemId(e.target.value)} placeholder="e.g. 3" />
-        </div>
-        <div>
-            <label className="text-xs text-gray-500">Lote</label>
-            <input className="border rounded-lg px-3 py-2 w-40" value={lot} onChange={e=>setLot(e.target.value)} placeholder="AA-001" />
-        </div>
-        <button onClick={()=>{
-            const q = new URLSearchParams();
-            if (itemId) q.set('item_id', itemId);
-            if (lot) q.set('lote_codigo', lot);
-            router.push(`/lots?${q.toString()}`);
-        }} className="px-4 py-2 rounded-xl bg-black text-white">Filtrar</button>
-        </div>
-    );
+  // Estilos consistentes
+  const inputClass = "border border-gray-300 rounded-xl px-4 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all";
+  const labelClass = "text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 mb-1 block";
+
+  const handleFilter = () => {
+    const q = new URLSearchParams();
+    // Preservar otros params si fuera necesario, o limpiar. Aquí limpiamos para nueva búsqueda.
+    if (itemId) q.set('item_id', itemId);
+    if (search) q.set('search', search);
+    
+    router.push(`/lots?${q.toString()}`);
+  };
+
+  const handleClear = () => {
+    setItemId('');
+    setSearch('');
+    router.push('/lots');
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 items-end">
+      
+      {/* Filtro por ID de Item */}
+      <div className="w-full sm:w-auto">
+        <label className={labelClass}>Item ID</label>
+        <input 
+          className={`${inputClass} w-full sm:w-32`} 
+          value={itemId} 
+          onChange={e => setItemId(e.target.value)} 
+          placeholder="Ej. 3" 
+          type="number"
+        />
+      </div>
+
+      {/* Filtro por Código de Lote (Búsqueda) */}
+      <div className="w-full sm:w-auto">
+        <label className={labelClass}>Buscar Lote</label>
+        <input 
+          className={`${inputClass} w-full sm:w-48`} 
+          value={search} 
+          onChange={e => setSearch(e.target.value)} 
+          placeholder="Ej. L-2023..." 
+        />
+      </div>
+
+      {/* Botones de Acción */}
+      <div className="flex gap-2 w-full sm:w-auto">
+        <button 
+          onClick={handleFilter} 
+          className="px-5 py-2 rounded-xl bg-gray-900 text-white font-medium text-sm hover:bg-black transition shadow-md active:scale-95"
+        >
+          Filtrar
+        </button>
+        
+        {(itemId || search) && (
+          <button 
+            onClick={handleClear} 
+            className="px-4 py-2 rounded-xl bg-white text-gray-600 border border-gray-200 font-medium text-sm hover:bg-gray-50 transition"
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
