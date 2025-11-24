@@ -88,6 +88,44 @@ const updateItemJsonSchema = {
     additionalProperties: false
 };
 
+// ==========================================
+// NUEVO: Lógica de Login Simple (Hardcoded)
+// ==========================================
+const users = [
+    { nombre: 'Renato Chero', email: 'renato@gmail.com', password: 'renato123', puesto: 'Gerente' },
+    { nombre: 'Tonny Namoc', email: 'tonny@gmail.com', password: 'tonny123', puesto: 'Supervisor' },
+    { nombre: 'Ruth Aquino', email: 'ruth@gmail.com', password: 'ruth123', puesto: 'Analista' }
+];
+
+app.post('/login', {
+    schema: {
+        description: 'Iniciar sesión simple',
+        tags: ['Auth'],
+        body: {
+            type: 'object',
+            properties: {
+                email: { type: 'string' },
+                password: { type: 'string' }
+            },
+            required: ['email', 'password']
+        }
+    }
+}, async (req, reply) => {
+    const { email, password } = req.body as any;
+
+    // Buscamos el usuario
+    const user = users.find(u => u.email === email && u.password === password);
+
+    if (user) {
+        // Retornamos la info del usuario (sin la contraseña)
+        const { password, ...userInfo } = user;
+        return reply.send(userInfo);
+    }
+
+    return reply.code(401).send({ message: 'Credenciales incorrectas' });
+});
+// ==========================================
+
 // ---------------------- Rutas básicas ----------------------
 app.get('/health', { schema: { tags: ['Dev'], description: 'Verifica el estado de la API' } }, async () => ({ ok: true }));
 
