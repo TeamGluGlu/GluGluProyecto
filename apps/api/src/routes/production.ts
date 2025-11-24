@@ -2,6 +2,10 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import {
+  inventory_movements_motivo,
+  inventory_movements_tipo
+} from '@prisma/client';
 
 export async function registerProductionRoutes(
   app: FastifyInstance,
@@ -258,8 +262,8 @@ const BatchResponseSchema = {
               data: {
                 item_id: line.item_id,
                 lot_id: line.lot_id,
-                tipo: 'OUT',
-                motivo: 'USO_PRODUCCION',
+                motivo: inventory_movements_motivo.USO_PRODUCCION,
+                tipo: inventory_movements_tipo.OUT,
                 cantidad: line.cantidad,
                 ref_tipo: 'BATCH',
                 ref_id: batch.id,
@@ -275,8 +279,8 @@ const BatchResponseSchema = {
             data: {
               item_id: body.bidon_item_id,
               lot_id: bidonLot!.id,
-              tipo: 'IN',
-              motivo: 'PRODUCCION',
+              motivo: inventory_movements_motivo.PRODUCCION,
+              tipo: inventory_movements_tipo.IN,
               cantidad: body.bidones_llenados,
               ref_tipo: 'BATCH',
               ref_id: batch.id,
