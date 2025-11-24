@@ -33,8 +33,11 @@ const HeaderIcon = ({ columnKey }: { columnKey: string }) => {
   );
 };
 
-
-export function DataTable<T extends { id?: string|number }>({ columns, rows }:{ columns: { key: keyof T; header: string; }[]; rows: T[]; }) {  
+// FIX: Usamos ReadonlyArray para que sea compatible con la definición 'as const' de las columnas
+export function DataTable<T extends object>({ columns, rows }:{ 
+  columns: ReadonlyArray<{ key: keyof T; header: string; }>, 
+  rows: T[]; 
+}) {  
   const safeRows = rows || [];
   
   return (
@@ -77,10 +80,12 @@ export function DataTable<T extends { id?: string|number }>({ columns, rows }:{ 
               className="group bg-white hover:bg-gray-50 transition-colors"
             >
               {columns.map((c, index) => {
-                // Borde inferior sutil
+                // Se mantiene la aserción interna para la indexación de objetos genéricos
+                const rowAsRecord = r as Record<keyof T, unknown>;
+                
                 return (
                   <td key={String(c.key)} className="px-6 py-4 text-gray-700 border-b border-gray-100 group-hover:text-black first:rounded-l-lg last:rounded-r-lg">
-                    {String(r[c.key] ?? '')}
+                    {String(rowAsRecord[c.key] ?? '')}
                   </td>
                 );
               })}
@@ -91,9 +96,9 @@ export function DataTable<T extends { id?: string|number }>({ columns, rows }:{ 
             <tr>
               <td colSpan={columns.length} className="text-center py-10 text-gray-400 bg-white rounded-xl border border-gray-100 mt-2">
                 <div className="flex flex-col items-center justify-center gap-2">
-                  {/* AQUÍ ESTÁ EL CAMBIO: Ícono de Archivo/Documento en Negro, más pequeño */}
+                  {/* Ícono de Archivo/Documento en Negro, más pequeño */}
                   <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 0 01.293.707V19a2 0 01-2 2z" />
                   </svg>
                   <span>No hay datos disponibles</span>
                 </div>

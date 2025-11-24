@@ -11,7 +11,7 @@ import './utils/bigint-json.js';
 import { registerItemLotsRoutes } from './routes/itemLots.js';
 import { registerMovementRoutes } from './routes/movements.js';
 import { registerStockRoutes } from './routes/stock.js';
-import { registerProductionRoutes } from './routes/production.js'; // 👈 Agregar este import
+import { registerProductionRoutes } from './routes/production.js'; 
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -51,16 +51,21 @@ const itemBaseSchema = {
         nombre: { type: 'string' },
         tipo: { type: 'string', enum: ['TAPA', 'PRECINTO', 'ETIQUETA', 'CA_O', 'BIDON_NUEVO', 'QUIMICO'] },
         unidad: { type: 'string', enum: ['UND', 'ML', 'LT', 'KG'] },
-        activo: { type: 'boolean' }
+        activo: { type: 'boolean' },
+        // Agregamos esto para que se vea en la respuesta si se desea
+        minimo_alerta: { type: 'number', nullable: true } 
     }
 };
 
+// --- MODIFICACIÓN 1: Agregar 'minimo' al schema de creación ---
 const createItemSchema = z.object({
     nombre: z.string().min(2).max(100),
     tipo: z.enum(['TAPA', 'PRECINTO', 'ETIQUETA', 'CA_O', 'BIDON_NUEVO', 'QUIMICO']),
     unidad: z.enum(['UND', 'ML', 'LT', 'KG']).default('UND'),
-    activo: z.boolean().default(true)
+    activo: z.boolean().default(true),
+    minimo: z.number().nonnegative().optional() // <--- NUEVO CAMPO
 });
+
 // JSON Schema para Item (Request Body)
 const createItemJsonSchema = {
     type: 'object',
@@ -68,7 +73,8 @@ const createItemJsonSchema = {
         nombre: { type: 'string', description: 'Nombre del ítem (mín. 2, máx. 100)' },
         tipo: { type: 'string', enum: ['TAPA', 'PRECINTO', 'ETIQUETA', 'CA_O', 'BIDON_NUEVO', 'QUIMICO'], description: 'Tipo de ítem' },
         unidad: { type: 'string', enum: ['UND', 'ML', 'LT', 'KG'], default: 'UND', description: 'Unidad de medida' },
-        activo: { type: 'boolean', default: true, description: 'Estado del ítem' }
+        activo: { type: 'boolean', default: true, description: 'Estado del ítem' },
+        minimo: { type: 'number', description: 'Stock mínimo para alerta' } // <--- Documentación
     },
     required: ['nombre', 'tipo'],
     additionalProperties: false
@@ -98,7 +104,17 @@ app.get('/items', {
         }
     }
 }, async () => {
-    return prisma.items.findMany({ orderBy: { nombre: 'asc' } });
+    // Incluimos la relación thresholds para ver el mínimo actual
+    const items = await prisma.items.findMany({ 
+        orderBy: { nombre: 'asc' },
+        include: { thresholds: true } 
+    });
+    
+    // Aplanamos la respuesta para que 'minimo_alerta' parezca parte del ítem
+    return items.map(i => ({
+        ...i,
+        minimo_alerta: i.thresholds?.minimo_alerta ? Number(i.thresholds.minimo_alerta) : 0
+    }));
 });
 
 // OBTENER item por id
@@ -116,13 +132,19 @@ app.get('/items/:id', {
     const parsed = idParamSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
-    const item = await prisma.items.findUnique({ where: { id: parsed.data.id } });
+    const item = await prisma.items.findUnique({ 
+        where: { id: parsed.data.id },
+        include: { thresholds: true }
+    });
     if (!item) return reply.code(404).send({ message: 'Item no encontrado' });
 
-    return item;
+    return {
+        ...item,
+        minimo_alerta: item.thresholds?.minimo_alerta ? Number(item.thresholds.minimo_alerta) : 0
+    };
 });
 
-// CREAR item
+// CREAR item (CORREGIDO)
 app.post('/items', {
     schema: {
         description: 'CREAR un nuevo ítem',
@@ -131,18 +153,34 @@ app.post('/items', {
         response: {
             201: itemBaseSchema,
             400: { type: 'object', properties: { message: { type: 'string' } } },
-            409: { type: 'object', properties: { message: { type: 'string' } } }, // P2002
+            409: { type: 'object', properties: { message: { type: 'string' } } }, 
         }
     }
 }, async (req, reply) => {
     const parsed = createItemSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
-    const created = await prisma.items.create({ data: parsed.data });
-    return reply.code(201).send(created);
+    const { minimo, ...itemData } = parsed.data;
+
+    // --- MODIFICACIÓN 2: Transacción para crear Item + Threshold ---
+    const created = await prisma.items.create({
+        data: {
+            ...itemData,
+            // Si viene 'minimo', creamos la relación con la tabla thresholds
+            thresholds: minimo !== undefined ? {
+                create: { minimo_alerta: minimo }
+            } : undefined
+        },
+        include: { thresholds: true }
+    });
+
+    return reply.code(201).send({
+        ...created,
+        minimo_alerta: created.thresholds?.minimo_alerta ? Number(created.thresholds.minimo_alerta) : 0
+    });
 });
 
-// ACTUALIZAR item
+// ACTUALIZAR item (CORREGIDO)
 app.put('/items/:id', {
     schema: {
         description: 'ACTUALIZAR un ítem existente por ID',
@@ -162,14 +200,31 @@ app.put('/items/:id', {
     const body = updateItemSchema.safeParse(req.body);
     if (!body.success) return reply.code(400).send(body.error.flatten());
 
+    const { minimo, ...itemData } = body.data;
+
     try {
+        // --- MODIFICACIÓN 3: Actualizar Item y Threshold (Upsert) ---
         const updated = await prisma.items.update({
-        where: { id: params.data.id },
-        data: body.data
-    });
-        return updated;
-    } catch {
-    return reply.code(404).send({ message: 'Item no encontrado' });
+            where: { id: params.data.id },
+            data: {
+                ...itemData,
+                thresholds: minimo !== undefined ? {
+                    upsert: {
+                        create: { minimo_alerta: minimo },
+                        update: { minimo_alerta: minimo }
+                    }
+                } : undefined
+            },
+            include: { thresholds: true }
+        });
+
+        return {
+            ...updated,
+            minimo_alerta: updated.thresholds?.minimo_alerta ? Number(updated.thresholds.minimo_alerta) : 0
+        };
+    } catch (e) {
+        req.log.error(e);
+        return reply.code(404).send({ message: 'Item no encontrado o error al actualizar' });
     }
 });
 
@@ -189,7 +244,7 @@ app.delete('/items/:id', {
   if (!params.success) return reply.code(400).send(params.error.flatten());
 
   try {
-    const updated = await prisma.items.update({
+    await prisma.items.update({
       where: { id: params.data.id },
       data: { activo: false },
     });
@@ -213,8 +268,8 @@ await registerMovementRoutes(app, prisma);
 app.log.info('Registrando rutas: stock');
 await registerStockRoutes(app, prisma);
 
-app.log.info('Registrando rutas: production'); // 👈 Agregar este log
-await registerProductionRoutes(app, prisma); // 👈 Agregar este registro
+app.log.info('Registrando rutas: production'); 
+await registerProductionRoutes(app, prisma); 
 
 // ---------------------- Error handler global ----------------------
 app.setErrorHandler((err, _req, reply) => {
