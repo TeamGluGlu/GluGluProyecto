@@ -97,7 +97,7 @@ export default function ReportsPage() {
       );
 
       // 2. Cargar Lotes para Aging
-      const lotsRes = await api<{ data: ApiLotItem[] }>('/item-lots/stock?pageSize=1000');
+      const lotsRes = await api<{ data: ApiLotItem[] }>('/item-lots/stock?pageSize=100');
       const lotsData = lotsRes.data || [];
       
       const today = new Date();

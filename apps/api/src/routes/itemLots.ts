@@ -19,23 +19,30 @@ const idParamJsonSchema = {
 
 export async function registerItemLotsRoutes(app: FastifyInstance, prisma: PrismaClient) {
     
-    // ⚠️ CRÍTICO: Endpoint de Stock
-    // HEMOS ELIMINADO 'response: { 200: ... }' AQUÍ PARA EVITAR EL ERROR 500
+    // ⚠️ CRÍTICO: Endpoint de Stock con DEBUGGING MEJORADO
     app.get('/item-lots/stock', {
         schema: {
             description: 'OBTENER el stock actual de cada lote',
             tags: ['ItemLots', 'Stock'],
             querystring: listItemLotsQueryJsonSchema,
-            // ¡OJO! No poner 'response' aquí para evitar errores de serialización con BigInt/Decimal
         }
     }, async (req, reply) => {
         try {
+            // 1. VALIDAR QUERY PARAMS
             const parsed = listItemLotsQuery.safeParse(req.query);
-            if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
+            if (!parsed.success) {
+                app.log.error({ error: parsed.error }, '❌ Error validando query params');
+                return reply.code(400).send({ 
+                    message: 'Parámetros inválidos',
+                    errors: parsed.error.flatten() 
+                });
+            }
             const q = parsed.data;
 
             const { skip, take } = toSkipTake(q);
+            app.log.info(`📊 Consultando stock - skip: ${skip}, take: ${take}`);
 
+            // 2. CONSTRUIR CONDICIONES WHERE
             let whereItemId = '';
             let whereSearch = '';
             
@@ -48,7 +55,7 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
                 whereSearch = `AND il.lote_codigo ILIKE '%${searchEscaped}%'`;
             }
 
-            // 1. Query principal
+            // 3. EJECUTAR QUERY PRINCIPAL
             const queryStr = `
               SELECT
                 il.item_id,
@@ -78,9 +85,11 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
               LIMIT ${take} OFFSET ${skip}
             `;
 
+            app.log.info('🔍 Ejecutando query SQL...');
             const rawData = await prisma.$queryRawUnsafe<any[]>(queryStr);
+            app.log.info(`✅ Query exitosa - ${rawData.length} registros encontrados`);
 
-            // 2. Calcular Total
+            // 4. CALCULAR TOTAL
             const countQueryStr = `
               SELECT COUNT(*) as total
               FROM (
@@ -102,19 +111,59 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             
             const totalRows = await prisma.$queryRawUnsafe<any[]>(countQueryStr);
             const total = Number(totalRows?.[0]?.total || 0);
+            app.log.info(`📊 Total de lotes con stock: ${total}`);
 
-            // 3. Conversión segura
-            const cleanData = rawData.map(row => ({
-                item_id: Number(row.item_id),
-                item_nombre: String(row.item_nombre || ''),
-                item_unidad: String(row.item_unidad || 'UND'),
-                lot_id: Number(row.lot_id),
-                lote_codigo: String(row.lote_codigo || ''),
-                fecha_ingreso: row.fecha_ingreso instanceof Date 
-                    ? row.fecha_ingreso.toISOString()
-                    : new Date(row.fecha_ingreso).toISOString(),
-                stock_actual: Number(row.stock_actual) || 0 
-            }));
+            // 5. CONVERSIÓN SEGURA DE DATOS
+            const cleanData = rawData.map((row, index) => {
+                try {
+                    // Convertir stock_actual (puede ser Decimal, BigInt, o número)
+                    let stockValue = 0;
+                    if (row.stock_actual !== null && row.stock_actual !== undefined) {
+                        // Si es un objeto Decimal de Prisma
+                        if (typeof row.stock_actual === 'object' && 'toNumber' in row.stock_actual) {
+                            stockValue = row.stock_actual.toNumber();
+                        } 
+                        // Si es BigInt
+                        else if (typeof row.stock_actual === 'bigint') {
+                            stockValue = Number(row.stock_actual);
+                        }
+                        // Si es string o número
+                        else {
+                            stockValue = Number(row.stock_actual);
+                        }
+                    }
+
+                    // Convertir fecha de manera segura
+                    let fechaStr = '';
+                    try {
+                        if (row.fecha_ingreso instanceof Date) {
+                            fechaStr = row.fecha_ingreso.toISOString();
+                        } else if (row.fecha_ingreso) {
+                            fechaStr = new Date(row.fecha_ingreso).toISOString();
+                        } else {
+                            fechaStr = new Date().toISOString();
+                        }
+                    } catch (dateError) {
+                        app.log.warn({ error: dateError }, `⚠️ Error convirtiendo fecha en fila ${index}`);
+                        fechaStr = new Date().toISOString();
+                    }
+
+                    return {
+                        item_id: Number(row.item_id) || 0,
+                        item_nombre: String(row.item_nombre || ''),
+                        item_unidad: String(row.item_unidad || 'UND'),
+                        lot_id: Number(row.lot_id) || 0,
+                        lote_codigo: String(row.lote_codigo || ''),
+                        fecha_ingreso: fechaStr,
+                        stock_actual: stockValue
+                    };
+                } catch (rowError) {
+                    app.log.error({ error: rowError, row }, `❌ Error procesando fila ${index}`);
+                    throw rowError;
+                }
+            });
+
+            app.log.info('✅ Datos procesados correctamente');
 
             return reply.send({
                 meta: {
@@ -127,13 +176,28 @@ export async function registerItemLotsRoutes(app: FastifyInstance, prisma: Prism
             });
 
         } catch (error) {
-            app.log.error(error);
+            // LOGGING DETALLADO DEL ERROR
+            const errorInfo = {
+                type: error?.constructor?.name || 'Unknown',
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                code: error && typeof error === 'object' && 'code' in error ? (error as any).code : undefined,
+                meta: error && typeof error === 'object' && 'meta' in error ? (error as any).meta : undefined,
+            };
+
+            app.log.error({ error: errorInfo }, '❌❌❌ ERROR EN /item-lots/stock ❌❌❌');
+
             return reply.code(500).send({ 
                 message: "Error interno al obtener stock de lotes",
-                error: error instanceof Error ? error.message : String(error)
+                error: errorInfo.message,
+                type: errorInfo.type,
+                // Solo en desarrollo:
+                stack: process.env.NODE_ENV === 'development' ? errorInfo.stack : undefined
             });
         }
     });
+
+    // ... resto de endpoints (sin cambios)
 
     // Listar simple (items)
     app.get('/item-lots', {

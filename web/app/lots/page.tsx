@@ -18,7 +18,7 @@ interface RawLot {
 
 // 2. Lo que usa la Tabla (con 'id' obligatorio)
 interface LotRow {
-  id: number; // <--- ¡ESTO FALTABA! La DataTable lo necesita.
+  id: number;
   item_id: number;
   item_nombre: string;
   item_unidad: string;
@@ -46,7 +46,7 @@ function getRowsSafe(res: unknown): LotRow[] {
   // Mapeamos para agregar 'id' y formatear
   return data.map((item) => ({
     ...item,
-    id: item.lot_id, // <--- Aquí asignamos el ID único para la tabla
+    id: item.lot_id,
     stock_actual: Number(item.stock_actual),
     fecha_ingreso: item.fecha_ingreso
       ? new Date(item.fecha_ingreso).toLocaleDateString('es-PE', {
@@ -69,14 +69,13 @@ export default async function LotsPage({
   if (sp?.item_id) qp.set('item_id', sp.item_id);
   if (sp?.search) qp.set('search', sp.search);
   qp.set('page', '1');
-  qp.set('pageSize', '50');
+  qp.set('pageSize', '100'); // ✅ CAMBIADO DE 1000 A 100
 
   let rows: LotRow[] = [];
   let total = 0;
   let errorMsg = '';
 
   try {
-    // Usamos unknown para ser estrictos con el tipo
     const res = await api<unknown>(`/item-lots/stock?${qp.toString()}`);
     rows = getRowsSafe(res);
 
