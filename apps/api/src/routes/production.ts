@@ -22,95 +22,111 @@ export async function registerProductionRoutes(
       return { ok: true, msg: 'Rutas de producción activas' };
     }
   );
+// ============================================================
+// Schemas Zod y JSON Schema
+// ============================================================
+const LineSchema = z.object({
+  item_id: z.number().int().positive().describe('ID del ítem consumido'),
+  lot_id: z.number().int().positive().describe('ID del lote consumido'),
+  cantidad: z.number().positive().describe('Cantidad consumida'),
+});
 
-  // ============================================================
-  // Schemas Zod y JSON Schema
-  // ============================================================
-  const LineSchema = z.object({
-    item_id: z.number().int().positive().describe('ID del ítem consumido'),
-    lot_id: z.number().int().positive().describe('ID del lote consumido'),
-    cantidad: z.number().positive().describe('Cantidad consumida'),
-  });
+const LineJsonSchema = {
+  type: 'object',
+  properties: {
+    item_id: { type: 'number', description: 'ID del ítem consumido' },
+    lot_id: { type: 'number', description: 'ID del lote consumido' },
+    cantidad: { type: 'number', description: 'Cantidad consumida' },
+  },
+  required: ['item_id', 'lot_id', 'cantidad'],
+  additionalProperties: false,
+};
 
-  const LineJsonSchema = {
-    type: 'object',
-    properties: {
-      item_id: { type: 'number', description: 'ID del ítem consumido' },
-      lot_id: { type: 'number', description: 'ID del lote consumido' },
-      cantidad: { type: 'number', description: 'Cantidad consumida' },
+const CreateBatchSchema = z.object({
+  shift_id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('ID del turno asociado'),
+  fecha_hora: z
+    .string()
+    .optional()
+    .describe('Fecha y hora del batch (ISO 8601 o nada para usar now())'),
+  bidones_llenados: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('Número de bidones producidos en el batch'),
+  bidon_item_id: z
+    .number()
+    .int()
+    .positive()
+    .describe('ID del ítem que representa el bidón lleno'),
+  bidon_lote_codigo: z
+    .string()
+    .max(50)
+    .describe('Código del lote para los bidones producidos'),
+  observacion: z
+    .string()
+    .max(255)
+    .optional()
+    .describe('Observación del batch'),
+  consumptions: z
+    .array(LineSchema)
+    .min(1)
+    .describe('Lista de ítems y cantidades consumidas'),
+});
+
+const CreateBatchJsonSchema = {
+  type: 'object',
+  properties: {
+    shift_id: {
+      type: 'number',
+      description: 'ID del turno asociado (opcional)',
     },
-    required: ['item_id', 'lot_id', 'cantidad'],
-    additionalProperties: false,
-  };
-
-  const CreateBatchSchema = z.object({
-    shift_id: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('ID del turno asociado'),
-    fecha_hora: z
-      .string()
-      .optional()
-      .describe('Fecha y hora del batch (ISO 8601 o nada para usar now())'),
-    bidones_llenados: z
-      .number()
-      .int()
-      .nonnegative()
-      .describe('Número de bidones producidos en el batch'),
-    observacion: z
-      .string()
-      .max(255)
-      .optional()
-      .describe('Observación del batch'),
-    consumptions: z
-      .array(LineSchema)
-      .min(1)
-      .describe('Lista de ítems y cantidades consumidas'),
-  });
-
-  const CreateBatchJsonSchema = {
-    type: 'object',
-    properties: {
-      shift_id: {
-        type: 'number',
-        description: 'ID del turno asociado (opcional)',
-      },
-      fecha_hora: {
-        type: 'string',
-        format: 'date-time',
-        description:
-          'Fecha y hora del batch (opcional, usa `now()` si no se provee)',
-      },
-      bidones_llenados: {
-        type: 'number',
-        description: 'Número de bidones producidos en el batch',
-      },
-      observacion: {
-        type: 'string',
-        description: 'Observación del batch (opcional)',
-      },
-      consumptions: {
-        type: 'array',
-        description: 'Lista de ítems y cantidades consumidas',
-        items: LineJsonSchema,
-      },
+    fecha_hora: {
+      type: 'string',
+      format: 'date-time',
+      description: 'Fecha y hora del batch (opcional, usa `now()` si no se provee)',
     },
-    required: ['bidones_llenados', 'consumptions'],
-    additionalProperties: false,
-  };
-
-  const BatchResponseSchema = {
-    type: 'object',
-    properties: {
-      id: { type: 'number', description: 'ID del batch creado' },
-      shift_id: { type: 'number' },
-      fecha_hora: { type: 'string', format: 'date-time' },
-      bidones_llenados: { type: 'number' },
-      observacion: { type: 'string', nullable: true },
+    bidones_llenados: {
+      type: 'number',
+      description: 'Número de bidones producidos en el batch',
     },
-  };
+    bidon_item_id: {
+      type: 'number',
+      description: 'ID del ítem que representa el bidón lleno',
+    },
+    bidon_lote_codigo: {
+      type: 'string',
+      description: 'Código del lote para los bidones producidos',
+    },
+    observacion: {
+      type: 'string',
+      description: 'Observación del batch (opcional)',
+    },
+    consumptions: {
+      type: 'array',
+      description: 'Lista de ítems y cantidades consumidas',
+      items: LineJsonSchema,
+    },
+  },
+  required: ['bidones_llenados', 'bidon_item_id', 'bidon_lote_codigo', 'consumptions'],
+  additionalProperties: false,
+};
+
+const BatchResponseSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number', description: 'ID del batch creado' },
+    shift_id: { type: 'number' },
+    fecha_hora: { type: 'string', format: 'date-time' },
+    bidones_llenados: { type: 'number' },
+    observacion: { type: 'string', nullable: true },
+    bidon_lot_id: { type: 'number', description: 'ID del lote de bidones creado' },
+  },
+};
 
 // ============================================================
 // POST /production/batches — Registrar batch completo
@@ -172,7 +188,43 @@ app.post(
 
         console.log('✅ Shift validado:', shiftExists);
 
-        // 3. Crear Batch
+        // 3. Verificar que el item de bidón existe
+        const bidonItem = await tx.items.findUnique({
+          where: { id: body.bidon_item_id },
+        });
+
+        if (!bidonItem) {
+          throw new Error(`Item de bidón con ID ${body.bidon_item_id} no encontrado`);
+        }
+
+        console.log('✅ Item de bidón validado:', bidonItem.nombre);
+
+        // 4. Crear o buscar el lote para los bidones producidos
+        const fechaIngreso = new Date(fecha);
+        fechaIngreso.setHours(0, 0, 0, 0); // Solo fecha, sin hora
+
+        let bidonLot = await tx.item_lots.findFirst({
+          where: {
+            item_id: body.bidon_item_id,
+            lote_codigo: body.bidon_lote_codigo,
+          },
+        });
+
+        if (!bidonLot) {
+          console.log('📦 Creando nuevo lote para bidones...');
+          bidonLot = await tx.item_lots.create({
+            data: {
+              item_id: body.bidon_item_id,
+              lote_codigo: body.bidon_lote_codigo,
+              fecha_ingreso: fechaIngreso,
+              costo_lote: 0, // Podrías calcularlo basado en los consumos
+              cantidad_inicial: body.bidones_llenados,
+            },
+          });
+          console.log('✅ Lote de bidones creado:', bidonLot.id);
+        }
+
+        // 5. Crear Batch
         console.log('📝 Creando batch...');
         const batch = await tx.production_batches.create({
           data: {
@@ -185,7 +237,7 @@ app.post(
 
         console.log('✅ Batch creado:', batch.id);
 
-        // 4. Crear Consumos y Movimientos
+        // 6. Procesar CONSUMOS (materias primas) - SALEN del inventario
         for (const line of body.consumptions) {
           console.log(`📦 Procesando consumo: item ${line.item_id}, lot ${line.lot_id}, cantidad ${line.cantidad}`);
 
@@ -216,7 +268,7 @@ app.post(
 
           console.log(`✅ Consumo registrado para item ${line.item_id}`);
 
-          // B) Registrar Movimiento OUT (CON turno_id)
+          // B) Registrar Movimiento OUT (CON turno_id) - RESTA del stock
           await tx.inventory_movements.create({
             data: {
               item_id: line.item_id,
@@ -235,9 +287,31 @@ app.post(
           console.log(`✅ Movimiento OUT registrado para item ${line.item_id}`);
         }
 
+        // 7. Registrar ENTRADA de bidones producidos - SUMA al stock
+        console.log(`🏭 Registrando entrada de ${body.bidones_llenados} bidones...`);
+        
+        await tx.inventory_movements.create({
+          data: {
+            item_id: body.bidon_item_id,
+            lot_id: bidonLot.id,
+            tipo: 'IN',
+            motivo: 'PRODUCCION',
+            cantidad: body.bidones_llenados,
+            ref_tipo: 'BATCH',
+            ref_id: batch.id,
+            turno_id: currentShiftId,
+            fecha_hora: fecha,
+            observacion: `Producción de batch #${batch.id}`,
+          },
+        });
+
+        console.log('✅ Entrada de bidones registrada');
         console.log('✅ Todos los consumos y movimientos procesados');
 
-        return batch;
+        return {
+          ...batch,
+          bidon_lot_id: bidonLot.id,
+        };
       });
 
       console.log('🎉 Batch creado exitosamente:', result.id);

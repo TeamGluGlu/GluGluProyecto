@@ -185,6 +185,7 @@ enum inventory_movements_motivo {
   MERMA
   AJUSTE
   DEVOLUCION
+  PRODUCCION
 }
 
 enum production_wastes_razon {
