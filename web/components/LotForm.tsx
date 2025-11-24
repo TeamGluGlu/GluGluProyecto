@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // Importar useRouter
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
-export default function LotForm() {
-  const router = useRouter(); // Inicializar router
+// Definimos un tipo simple para los ítems que vamos a cargar del selector
+type ItemOption = {
+  id: number;
+  nombre: string;
+};
 
+export default function LotForm() {
+  const router = useRouter();
+
+  // Estados del formulario
+  const [items, setItems] = useState<ItemOption[]>([]); // Lista de productos para el select
   const [itemId, setItemId] = useState('');
   const [lote, setLote] = useState('');
   const [fecha, setFecha] = useState('');
@@ -15,6 +23,22 @@ export default function LotForm() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  // 1. Cargar la lista de ítems al iniciar el componente
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        // Tu endpoint GET /items devuelve un array directo según tu server.ts
+        const data = await api<ItemOption[]>('/items');
+        if (Array.isArray(data)) {
+          setItems(data);
+        }
+      } catch (error) {
+        console.error('Error al cargar lista de productos:', error);
+      }
+    };
+    fetchItems();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,25 +61,24 @@ export default function LotForm() {
 
       setMessage('✅ Lote creado exitosamente');
 
-      // Limpiar inputs
+      // Limpiar inputs (dejamos el select en blanco o predeterminado)
       setItemId('');
       setLote('');
       setFecha('');
       setCosto('');
       setCantidad('');
 
-      // Recargar datos de la tabla sin recargar la página completa
       router.refresh(); 
-      
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : 'Error al crear lote';
-
       setMessage(`❌ Error: ${errorMessage}`);
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Estilos reutilizables consistentes con ItemForm
+  // Estilos reutilizables (mismos que tenías)
   const inputClass = "w-full border border-gray-300 rounded-xl px-4 py-2.5 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 text-sm";
   const labelClass = "text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 block mb-1";
 
@@ -77,17 +100,22 @@ export default function LotForm() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
         
+        {/* MODIFICADO: Ahora es un Select */}
         <div>
-          <label className={labelClass}>Item ID</label>
-          <input
+          <label className={labelClass}>Producto</label>
+          <select
             required
-            type="number"
-            min="1"
             value={itemId}
             onChange={(e) => setItemId(e.target.value)}
-            placeholder="ID"
             className={inputClass}
-          />
+          >
+            <option value="">Seleccionar...</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nombre}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
