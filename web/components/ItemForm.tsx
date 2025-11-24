@@ -8,7 +8,7 @@ export default function ItemForm() {
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState('TAPA');
   const [unidad, setUnidad] = useState('UND');
-  const [minimo, setMinimo] = useState(''); // <-- NUEVO ESTADO
+  // const [minimo, setMinimo] = useState(''); // <-- ELIMINADO: Ya no lo gestiona el usuario
   const [cantidadInicial, setCantidadInicial] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | undefined>();
@@ -21,7 +21,7 @@ export default function ItemForm() {
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
     try {
-      // 1) Crear item (Ahora enviamos 'minimo')
+      // 1) Crear item
       const resItem = await fetch(`${base}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -29,7 +29,7 @@ export default function ItemForm() {
           nombre,
           tipo,
           unidad,
-          minimo: Number(minimo) || 0, // <-- ENVIAMOS EL MÍNIMO AL BACKEND
+          minimo: 60, // <-- HARDCODED: Siempre se crea con alerta en 60
           activo: true,
         }),
       });
@@ -63,10 +63,9 @@ export default function ItemForm() {
       }
 
       setMsg('✅ Item creado correctamente');
-      // Resetear campos
       setNombre('');
       setCantidadInicial('');
-      setMinimo(''); // Resetear mínimo
+      // setMinimo(''); // <-- ELIMINADO
       
       router.refresh(); 
 
@@ -94,10 +93,10 @@ export default function ItemForm() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4"> {/* Cambiado a 5 columnas para que quepa el nuevo campo */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* Regresamos a 4 columnas */}
         
         {/* Nombre */}
-        <div className="space-y-1 md:col-span-1">
+        <div className="space-y-1">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Nombre</label>
           <input required value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Tapa Azul" className={inputClass} />
         </div>
@@ -124,19 +123,6 @@ export default function ItemForm() {
             <option value="LT">LT</option>
             <option value="KG">KG</option>
           </select>
-        </div>
-
-        {/* --- NUEVO CAMPO: MÍNIMO (ALERTA) --- */}
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 text-red-500">Mínimo (Alerta)</label>
-          <input
-            type="number"
-            min="0"
-            value={minimo}
-            onChange={(e) => setMinimo(e.target.value)}
-            placeholder="Ej. 10"
-            className={`${inputClass} border-red-100 focus:ring-red-500`} // Un toque rojo sutil para indicar que es una alerta
-          />
         </div>
 
         {/* Stock Inicial */}
