@@ -155,64 +155,86 @@ export default function ProductionForm() {
     }
   };
 
-  const inputClass = "w-full border border-gray-300 rounded-xl px-4 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-gray-900 outline-none";
+  // Clases base
+  const inputClass = "w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none transition-all placeholder:text-gray-400";
+  const labelClass = "block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+  
+  // Tu clase personalizada para botones
+  const buttonClass = "px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 shadow-md bg-gray-900 text-white hover:bg-black hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
     <div className="space-y-6">
       {/* Formulario Principal */}
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-bold text-gray-800">Registrar Batch de Producción</h3>
-          {msg && <span className={`text-xs px-3 py-1 rounded-lg font-medium ${msg.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{msg}</span>}
+      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 space-y-8">
+        
+        {/* Encabezado del Formulario */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Registrar Batch</h3>
+            <p className="text-xs text-gray-500 mt-1">Ingresa los detalles de la producción y sus consumos.</p>
+          </div>
+          {msg && (
+            <span className={`text-xs px-3 py-1.5 rounded-lg font-bold animate-pulse ${msg.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {msg}
+            </span>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Inputs Superiores */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bidones Producidos</label>
-            <input 
-              type="number" min="1" required 
-              value={bidones} onChange={e => setBidones(e.target.value)} 
-              className={inputClass} placeholder="Ej. 50" 
-            />
+            <label className={labelClass}>Bidones Producidos</label>
+            <div className="relative">
+              <input 
+                type="number" min="1" required 
+                value={bidones} onChange={e => setBidones(e.target.value)} 
+                className={inputClass} placeholder="Ej. 50" 
+              />
+              <span className="absolute right-4 top-2.5 text-gray-400 text-sm pointer-events-none">unid.</span>
+            </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Observación</label>
+            <label className={labelClass}>Observación</label>
             <input 
               type="text" 
               value={observacion} onChange={e => setObservacion(e.target.value)} 
-              className={inputClass} placeholder="Lote interno..." 
+              className={inputClass} placeholder="Ej. Lote interno 2024-A" 
             />
           </div>
         </div>
 
-        {/* Zona de Agregar Ingredientes */}
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-          <h4 className="text-sm font-bold text-gray-700 mb-3">Agregar Insumos / Materia Prima</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+        {/* Zona de Agregar Ingredientes (Gris Claro) */}
+        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+          <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-gray-900"></span>
+            Agregar Insumos / Materia Prima
+          </h4>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
             
             <div className="sm:col-span-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Insumo</label>
+              <label className={labelClass}>Insumo</label>
               <select 
                 value={selItemId} 
                 onChange={e => setSelItemId(e.target.value)} 
                 className={inputClass}
               >
-                <option value="">Seleccionar...</option>
+                <option value="">Seleccionar ítem...</option>
                 {items.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
               </select>
             </div>
 
             <div className="sm:col-span-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Lote {fetchingLots && '...'}
+              <label className={labelClass}>
+                Lote {fetchingLots && <span className="animate-pulse lowercase text-gray-400">(cargando...)</span>}
               </label>
               <select 
                 value={selLotId} 
                 onChange={e => setSelLotId(e.target.value)} 
-                className={inputClass}
+                className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-400`}
                 disabled={!selItemId}
               >
-                <option value="">Seleccionar...</option>
+                <option value="">Seleccionar lote...</option>
                 {lots.map(l => (
                   <option key={l.id} value={l.id}>{l.lote_codigo} (Stock: {l.stock_actual})</option>
                 ))}
@@ -220,7 +242,7 @@ export default function ProductionForm() {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
+              <label className={labelClass}>Cantidad</label>
               <input 
                 type="number" min="0.01" step="0.01"
                 value={selCantidad} 
@@ -234,7 +256,8 @@ export default function ProductionForm() {
                 type="button" 
                 onClick={addLine}
                 disabled={!selItemId || !selLotId || !selCantidad}
-                className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                // Aquí aplicamos tu estilo + w-full para que llene la columna
+                className={`w-full ${buttonClass}`}
               >
                 + Agregar
               </button>
@@ -243,51 +266,64 @@ export default function ProductionForm() {
         </div>
 
         {/* Tabla de Consumos */}
-        {consumptions.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-100 text-gray-600 font-semibold">
-                <tr>
-                  <th className="px-4 py-2">Insumo</th>
-                  <th className="px-4 py-2">Lote Origen</th>
-                  <th className="px-4 py-2 text-right">Cantidad</th>
-                  <th className="px-4 py-2 text-center">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {consumptions.map((line, idx) => (
-                  <tr key={idx} className="bg-white">
-                    <td className="px-4 py-2">{line.item_nombre}</td>
-                    <td className="px-4 py-2">{line.lote_codigo}</td>
-                    <td className="px-4 py-2 text-right font-mono">{line.cantidad}</td>
-                    <td className="px-4 py-2 text-center">
-                      <button 
-                        type="button" 
-                        onClick={() => removeLine(idx)}
-                        className="text-red-500 hover:text-red-700 font-bold"
-                      >
-                        ✕
-                      </button>
-                    </td>
+        <div>
+           {consumptions.length > 0 ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-wider">
+                  <tr>
+                    <th className="px-6 py-3">Insumo</th>
+                    <th className="px-6 py-3">Lote Origen</th>
+                    <th className="px-6 py-3 text-right">Cantidad</th>
+                    <th className="px-6 py-3 text-center">Acción</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-6 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl">
-            No hay insumos agregados al batch.
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {consumptions.map((line, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-3 font-medium text-gray-900">{line.item_nombre}</td>
+                      <td className="px-6 py-3 text-gray-600">{line.lote_codigo}</td>
+                      <td className="px-6 py-3 text-right font-mono text-gray-700">{line.cantidad}</td>
+                      <td className="px-6 py-3 text-center">
+                        <button 
+                          type="button" 
+                          onClick={() => removeLine(idx)}
+                          className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                          title="Eliminar línea"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-10 px-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+              <div className="text-gray-300 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-500">No hay insumos agregados.</p>
+              <p className="text-xs text-gray-400">Selecciona un insumo y lote arriba para comenzar.</p>
+            </div>
+          )}
+        </div>
 
-        <div className="flex justify-end pt-4 border-t border-gray-100">
-          <button 
-            type="submit" 
+        {/* Footer con Botón Principal */}
+        <div className="flex justify-end pt-6 border-t border-gray-100">
+          <button
+            type="submit"
             disabled={loading || consumptions.length === 0}
-            className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black disabled:opacity-50 transition-all"
-          >
+            className="px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 shadow-md bg-gray-900 text-white hover:bg-black hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
             {loading ? 'Registrando...' : 'Finalizar Producción'}
-          </button>
+            </button>
+
         </div>
       </form>
     </div>
