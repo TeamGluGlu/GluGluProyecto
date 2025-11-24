@@ -1,11 +1,10 @@
+// web/app/lots/page.tsx
 import { api } from '@/lib/api';
 import { Filters } from '@/components/Filters';
-import { DataTable } from '@/components/DataTable';
 import LotForm from '@/components/LotForm';
+import LotsClientTable from '@/components/LotsClientTable'; // <--- Importamos el nuevo componente
 
-// --- DEFINICIÓN DE TIPOS ---
-
-// 1. Lo que viene crudo de la API (sin 'id' obligatorio de frontend)
+// --- (Las interfaces y helper getRowsSafe se quedan igual) ---
 interface RawLot {
   item_id: number;
   item_nombre: string;
@@ -16,7 +15,6 @@ interface RawLot {
   stock_actual: number | string;
 }
 
-// 2. Lo que usa la Tabla (con 'id' obligatorio)
 interface LotRow {
   id: number;
   item_id: number;
@@ -28,13 +26,9 @@ interface LotRow {
   stock_actual: number | string;
 }
 
-// Helper seguro y tipado (sin any)
 function getRowsSafe(res: unknown): LotRow[] {
   if (!res || typeof res !== 'object') return [];
-
   let data: RawLot[] = [];
-
-  // Detectamos si es un array directo o viene dentro de { data: ... }
   if (Array.isArray(res)) {
     data = res as RawLot[];
   } else if ('data' in res && Array.isArray((res as { data: unknown }).data)) {
@@ -42,18 +36,12 @@ function getRowsSafe(res: unknown): LotRow[] {
   } else {
     return [];
   }
-
-  // Mapeamos para agregar 'id' y formatear
   return data.map((item) => ({
     ...item,
     id: item.lot_id,
     stock_actual: Number(item.stock_actual),
     fecha_ingreso: item.fecha_ingreso
-      ? new Date(item.fecha_ingreso).toLocaleDateString('es-PE', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        })
+      ? new Date(item.fecha_ingreso).toLocaleDateString('es-PE', { year: 'numeric', month: '2-digit', day: '2-digit' })
       : '-',
   }));
 }
@@ -64,12 +52,11 @@ export default async function LotsPage({
   searchParams: Promise<{ [k: string]: string | undefined }>;
 }) {
   const sp = await searchParams;
-
   const qp = new URLSearchParams();
   if (sp?.item_id) qp.set('item_id', sp.item_id);
   if (sp?.search) qp.set('search', sp.search);
   qp.set('page', '1');
-  qp.set('pageSize', '100'); // ✅ CAMBIADO DE 1000 A 100
+  qp.set('pageSize', '100');
 
   let rows: LotRow[] = [];
   let total = 0;
@@ -78,7 +65,6 @@ export default async function LotsPage({
   try {
     const res = await api<unknown>(`/item-lots/stock?${qp.toString()}`);
     rows = getRowsSafe(res);
-
     if (res && typeof res === 'object' && 'meta' in res) {
       total = (res as { meta: { total: number } }).meta.total;
     } else {
@@ -86,16 +72,8 @@ export default async function LotsPage({
     }
   } catch (err: unknown) {
     console.error('Error al obtener /item-lots/stock:', err);
-    errorMsg = err instanceof Error ? err.message : 'Error desconocido al cargar lotes';
+    errorMsg = err instanceof Error ? err.message : 'Error desconocido';
   }
-
-  const columns = [
-    { key: 'item_nombre', header: 'Producto' },
-    { key: 'lote_codigo', header: 'Lote' },
-    { key: 'item_unidad', header: 'Unidad' },
-    { key: 'fecha_ingreso', header: 'Fecha Ingreso' },
-    { key: 'stock_actual', header: 'Stock Actual' },
-  ] as const;
 
   return (
     <div className="w-full min-h-screen space-y-6">
@@ -105,26 +83,14 @@ export default async function LotsPage({
           <p className="text-sm text-gray-500 mt-1">Inventario detallado por lote</p>
         </div>
         <div className="bg-white px-5 py-2 rounded-xl border border-gray-200 shadow-sm flex items-center gap-3">
-          <span className="text-xs text-gray-500 font-bold uppercase tracking-wide">
-            Total Lotes
-          </span>
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-wide">Total Lotes</span>
           <div className="text-2xl font-bold text-gray-900">{total}</div>
         </div>
       </div>
 
-      {/* Mostrar error si existe */}
       {errorMsg && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-red-500 text-xl">⚠️</span>
-            <div>
-              <h3 className="text-sm font-bold text-red-900">Error al cargar datos</h3>
-              <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
-              <p className="text-xs text-red-600 mt-2">
-                Verifica que tu backend esté corriendo y la base de datos conectada.
-              </p>
-            </div>
-          </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800 text-sm">
+          ⚠️ {errorMsg}
         </div>
       )}
 
@@ -140,13 +106,8 @@ export default async function LotsPage({
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-0">
-          {rows.length === 0 && !errorMsg ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-400 text-sm">No hay lotes registrados</p>
-            </div>
-          ) : (
-            <DataTable columns={columns} rows={rows} />
-          )}
+          {/* Aquí usamos el componente cliente para tener filas clicables */}
+          <LotsClientTable rows={rows} />
         </div>
       </div>
     </div>
